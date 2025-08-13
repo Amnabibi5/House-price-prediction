@@ -14,7 +14,8 @@ bathrooms = st.number_input("Bathrooms", min_value=1, max_value=10)
 model_choice = st.selectbox("Choose a model", ["Linear Regression", "KNN", "Random Forest", "SVM"])
 
 # Load scaler
-with open('scaler.pkl', 'rb') as f:
+with open('model/scaler.pkl', 'rb') as f:
+
     scaler = pickle.load(f)
 
 # Load model
@@ -24,6 +25,7 @@ model_path = {
     "Random Forest": "model/random_forest_model.pkl",
     "SVM": "model/svm_model.pkl"
 }
+
 
 try:
     with open(model_path[model_choice], 'rb') as f:
@@ -47,4 +49,5 @@ if st.button("Predict Price"):
     st.write(f"**R² Score:** {metrics[model_choice]['R²']}")
     st.write(f"**Mean Squared Error:** {metrics[model_choice]['MSE']:,.2f}")
     st.write(f"**F1 Score:** {metrics[model_choice]['F1']}")
+
 

@@ -20,7 +20,7 @@ with open('model/scaler.pkl', 'rb') as f:
 
 # Load model
 model_path = {
-    "Linear Regression": "model/linear_regression_model.pkl",
+    "Linear Regression": "model/linear_model.pkl",  # ✅ match filename
     "KNN": "model/knn_model.pkl",
     "Random Forest": "model/random_forest_model.pkl",
     "SVM": "model/svm_model.pkl"
@@ -50,6 +50,7 @@ if st.button("Predict Price"):
     st.write(f"**R² Score:** {metrics[model_choice]['R²']}")
     st.write(f"**Mean Squared Error:** {metrics[model_choice]['MSE']:,.2f}")
     st.write(f"**F1 Score:** {metrics[model_choice]['F1']}")
+
 
 
 

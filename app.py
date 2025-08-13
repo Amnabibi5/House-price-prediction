@@ -63,26 +63,46 @@ elif page == "📊 Dashboard":
     # Load dataset
     df = pd.read_csv("data/housing.csv")
 
+    # Sidebar filters
+    st.sidebar.subheader("🔍 Filter Data")
+    min_price = int(df["price"].min())
+    max_price = int(df["price"].max())
+    price_range = st.sidebar.slider("Price Range", min_price, max_price, (min_price, max_price))
+    bedroom_filter = st.sidebar.multiselect("Bedrooms", sorted(df["bedrooms"].unique()), default=sorted(df["bedrooms"].unique()))
+
+    # Apply filters
+    filtered_df = df[
+        (df["price"] >= price_range[0]) &
+        (df["price"] <= price_range[1]) &
+        (df["bedrooms"].isin(bedroom_filter))
+    ]
+
     # Summary statistics
     st.subheader("📌 Summary Statistics")
-    st.dataframe(df.describe())
+    st.dataframe(filtered_df.describe())
 
     # Price distribution
     st.subheader("💰 Price Distribution")
     fig1, ax1 = plt.subplots()
-    sns.histplot(df["price"], bins=30, kde=True, ax=ax1)
+    sns.histplot(filtered_df["price"], bins=30, kde=True, ax=ax1)
     st.pyplot(fig1)
 
     # Area vs Price
     st.subheader("📐 Area vs Price")
     fig2, ax2 = plt.subplots()
-    sns.scatterplot(data=df, x="area", y="price", ax=ax2)
+    sns.scatterplot(data=filtered_df, x="area", y="price", ax=ax2)
     st.pyplot(fig2)
 
     # Bedrooms vs Price
     st.subheader("🛏 Bedrooms vs Price")
-    avg_price_by_bedroom = df.groupby("bedrooms")["price"].mean().reset_index()
+    avg_price_by_bedroom = filtered_df.groupby("bedrooms")["price"].mean().reset_index()
     st.bar_chart(avg_price_by_bedroom.set_index("bedrooms"))
+
+    # Correlation heatmap
+    st.subheader("📊 Correlation Heatmap")
+    fig_corr, ax_corr = plt.subplots()
+    sns.heatmap(filtered_df.corr(), annot=True, cmap="coolwarm", ax=ax_corr)
+    st.pyplot(fig_corr)
 
     # Model performance
     st.subheader("📈 Model Comparison")
@@ -91,6 +111,22 @@ elif page == "📊 Dashboard":
         st.write(f"R²: {scores['R²']}")
         st.write(f"MSE: {scores['MSE']:,.2f}")
         st.write(f"F1 Score: {scores['F1']}")
+
+    # Feature importance (Random Forest)
+    st.subheader("🌲 Feature Importance (Random Forest)")
+    rf_model_path = model_path["Random Forest"]
+    with open(rf_model_path, 'rb') as f:
+        rf_model = pickle.load(f)
+
+    features = ["area", "bedrooms", "bathrooms"]
+    importances = rf_model.feature_importances_
+
+    fig_imp, ax_imp = plt.subplots()
+    sns.barplot(x=importances, y=features, ax=ax_imp)
+    ax_imp.set_title("Feature Importance")
+    st.pyplot(fig_imp)
+
+
 
 
 

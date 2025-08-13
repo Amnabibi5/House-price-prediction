@@ -38,6 +38,7 @@ except FileNotFoundError:
 with open('model/metrics.pkl', 'rb') as f:
     metrics = pickle.load(f)
 
+
 # Predict
 if st.button("Predict Price"):
     input_data = scaler.transform([[area, bedrooms, bathrooms]])
@@ -49,5 +50,6 @@ if st.button("Predict Price"):
     st.write(f"**R² Score:** {metrics[model_choice]['R²']}")
     st.write(f"**Mean Squared Error:** {metrics[model_choice]['MSE']:,.2f}")
     st.write(f"**F1 Score:** {metrics[model_choice]['F1']}")
+
 
 

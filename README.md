@@ -42,7 +42,7 @@ It’s built with Python, scikit-learn, and Streamlit, and deployed live via Str
 
 ## 📸 Screenshot
 
-![App Screenshot](images/app_screenshot.png)
+![App Screenshot]images/app_screenshot.png.png
 
 
 

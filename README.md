@@ -43,7 +43,7 @@ It’s built with Python, scikit-learn, and Streamlit, and deployed live via Str
 ## 📸 Screenshot
 
 ![App Screenshot](images/app_screenshot.png.png)
-
+![App Screenshot](images/app-rdm_screenshot.png)
 
 
 

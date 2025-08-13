@@ -97,11 +97,14 @@ elif page == "📊 Dashboard":
     st.subheader("🛏 Bedrooms vs Price")
     avg_price_by_bedroom = filtered_df.groupby("bedrooms")["price"].mean().reset_index()
     st.bar_chart(avg_price_by_bedroom.set_index("bedrooms"))
+    
+   # Correlation heatmap (numeric only)
+st.subheader("📊 Correlation Heatmap")
+numeric_df = filtered_df.select_dtypes(include=["float64", "int64"])
+fig_corr, ax_corr = plt.subplots()
+sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm", ax=ax_corr)
+st.pyplot(fig_corr)
 
-    # Correlation heatmap
-    st.subheader("📊 Correlation Heatmap")
-    fig_corr, ax_corr = plt.subplots()
-    sns.heatmap(filtered_df.corr(), annot=True, cmap="coolwarm", ax=ax_corr)
     st.pyplot(fig_corr)
 
     # Model performance
@@ -125,6 +128,7 @@ elif page == "📊 Dashboard":
     sns.barplot(x=importances, y=features, ax=ax_imp)
     ax_imp.set_title("Feature Importance")
     st.pyplot(fig_imp)
+
 
 
 

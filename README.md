@@ -34,6 +34,16 @@ It’s built with Python, scikit-learn, and Streamlit, and deployed live via Str
 - GitHub
 
 ---
+# 🏡 House Price Prediction App
+
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://amnabibi5-house-price-prediction.streamlit.app)
+
+---
+
+## 📸 Screenshot
+
+![App Screenshot](images/app_screenshot.png)
+
 
 ## 📁 Project Structure
 

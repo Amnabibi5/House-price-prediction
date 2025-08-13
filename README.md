@@ -42,7 +42,7 @@ It’s built with Python, scikit-learn, and Streamlit, and deployed live via Str
 
 ## 📸 Screenshot
 
-![App Screenshot]images/app_screenshot.png.png
+![App Screenshot](House-price-prediction/blob/main/images/app_screenshot.png.png)
 
 
 

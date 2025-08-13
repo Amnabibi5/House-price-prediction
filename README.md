@@ -67,8 +67,12 @@ It’s built with Python, scikit-learn, and Streamlit, and deployed live via Str
 
 ## 📸 Screenshot
 
-![App Screenshot](images/app_screenshot.png.png)
-![App Screenshot](images/app-rdm_screenshot.png)
+![App Screenshot](images/app_screenshot.png)
+## 📸 Updated Dashboard Screenshot
+
+![Dashboard Screenshot](images/dashboard_screenshot.png)
+![Updated](https://img.shields.io/badge/Updated-Dashboard-blue)
+
 
 
 

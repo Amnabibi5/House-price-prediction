@@ -1,16 +1,40 @@
-# 🏡 House Price Prediction
+# 🏡 House Price Prediction App
 
-This project predicts house prices using multiple machine learning models and deploys an interactive web app using Streamlit.
+This Streamlit web app predicts house prices based on user input using multiple machine learning models.  
+It’s built with Python, scikit-learn, and Streamlit, and deployed live via Streamlit Cloud.
+
+---
+
+## 🚀 Live Demo
+
+👉 [Try the App Here] (https://house-price-prediction-tuvtktrzvhkkmc3vh6ztna.streamlit.app/)
+
+---
 
 ## 📦 Features
-- Preprocessing: scaling, outlier removal, feature engineering
-- Models: Linear Regression, KNN, Random Forest, SVM
-- Evaluation: R², F1 Score, MSE
-- Deployment: Streamlit web app with model selection
 
-## 🚀 How to Run
-1. Install dependencies: `pip install -r requirements.txt`
-2. Train models: `python src/train_model.py`
-3. Launch app: `streamlit run app.py`
+- Predict house prices using:
+  - Linear Regression
+  - K-Nearest Neighbors (KNN)
+  - Random Forest
+  - Support Vector Machine (SVM)
+- Scaled input features for better accuracy
+- Model performance metrics (R², MSE, F1 Score)
+- Clean UI with interactive inputs
 
-## 📂 Dataset Format
+---
+
+## 🧠 Technologies Used
+
+- Python
+- scikit-learn
+- pandas
+- Streamlit
+- pickle
+- GitHub
+
+---
+
+## 📁 Project Structure
+
+

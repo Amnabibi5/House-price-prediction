@@ -42,7 +42,9 @@ selected_model = st.sidebar.selectbox(
 
 
 # Load model
-model = joblib.load(f"{selected_model}.pkl")
+model = joblib.load(f"model/{selected_model}.pkl")
+
+
 
 # Input form
 st.title("🏠 House Price Prediction Dashboard")
@@ -87,6 +89,7 @@ if submitted:
         fig, ax = plt.subplots()
         ax.pie([1], labels=[category_label], colors=["lightgreen"], autopct="%1.1f%%")
         st.pyplot(fig)
+
 
 
 

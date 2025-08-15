@@ -27,11 +27,22 @@ jobs:
     - name: Run training script
       run: |
         python train_models.py
-
-    - name: Commit trained models
+- name: Commit trained models
       run: |
+      - name: Commit and push model files
+  env:
+    GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  run: |
+    git config --global user.name 'github-actions'
+    git config --global user.email 'github-actions@github.com'
+    git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}
+    git add models/*.pkl
+    git commit -m "Auto-update model files"
+    git push
+
         git config --global user.name "github-actions"
         git config --global user.email "actions@github.com"
         git add models/*.pkl metrics.csv
         git commit -m "Auto-update trained models"
         git push
+    

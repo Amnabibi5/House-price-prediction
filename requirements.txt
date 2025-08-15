@@ -1,8 +1,11 @@
-pandas
-scikit-learn
-streamlit
-matplotlib
-seaborn
-numpy
-pickle-mixin
+scikit-learn==1.3.0
+pandas==2.1.0
+joblib==1.3.2
+streamlit==1.29.0
+numpy==1.26.0
+matplotlib==3.8.0
+seaborn==0.12.2         # for visualizations
+xgboost==2.0.0          # if you're training XGBoost models
+lightgbm==4.2.0         # if you're using LightGBM
+
 

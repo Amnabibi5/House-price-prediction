@@ -1,0 +1,10 @@
+model,type,score
+LinearRegression,regression,1324506.9600914402
+Ridge,regression,1325417.4583414705
+Lasso,regression,1324508.622728772
+RandomForestRegressor,regression,1406305.9309389247
+GradientBoostingRegressor,regression,1298162.408420188
+LogisticRegression,classification,0.8073394495412844
+RandomForestClassifier,classification,0.7889908256880734
+GradientBoostingClassifier,classification,0.7889908256880734
+SVC,classification,0.7981651376146789

@@ -42,7 +42,7 @@ selected_model = st.sidebar.selectbox(
 
 
 # Load model
-model = joblib.load(f"model/{selected_model}.pkl")
+model = joblib.load(f"models/{selected_model}.pkl")
 
 
 
@@ -89,6 +89,7 @@ if submitted:
         fig, ax = plt.subplots()
         ax.pie([1], labels=[category_label], colors=["lightgreen"], autopct="%1.1f%%")
         st.pyplot(fig)
+
 
 
 

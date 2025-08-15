@@ -14,7 +14,7 @@ import pickle
 from sklearn.linear_model import LinearRegression
 from sklearn.datasets import make_regression
 # Load data
-df = pd.read_csv("Housing.csv")
+df = pd.read_csv("data/housing.csv")
 
 # Create price category for classification
 df["price_category"] = pd.cut(df["price"], bins=[0, 5000000, 10000000, np.inf],
@@ -110,5 +110,6 @@ with open("models/linear_model.pkl", "wb") as f:
     pickle.dump(model, f)
 
 print("Model saved to models/linear_model.pkl")
+
 
 

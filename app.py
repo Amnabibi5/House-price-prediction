@@ -1,131 +1,76 @@
 import streamlit as st
-import pickle
 import pandas as pd
+import joblib
+import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 
-# Sidebar navigation
-page = st.sidebar.selectbox("📂 Select Page", ["🏡 Prediction", "📊 Dashboard"])
+# Load label encoder for classification models
+try:
+    le = joblib.load("label_encoder.pkl")
+except:
+    le = None
 
-# Load scaler
-with open('model/scaler.pkl', 'rb') as f:
-    scaler = pickle.load(f)
+# Model options
+model_names = [
+    "LinearRegression", "Ridge", "Lasso", "RandomForestRegressor", "GradientBoostingRegressor",
+    "LogisticRegression", "RandomForestClassifier", "GradientBoostingClassifier", "SVC"
+]
 
-# Load metrics
-with open('model/metrics.pkl', 'rb') as f:
-    metrics = pickle.load(f)
+# Detect model type
+def is_regression(model_name):
+    return model_name.endswith("Regressor") or model_name in ["LinearRegression", "Ridge", "Lasso"]
 
-# Model paths
-model_path = {
-    "Linear Regression": "model/linear_regression_model.pkl",
-    "KNN": "model/knn_model.pkl",
-    "Random Forest": "model/random_forest_model.pkl",
-    "SVM": "model/svm_model.pkl"
-}
+# Sidebar
+st.sidebar.title("🔍 Model Selection")
+selected_model = st.sidebar.selectbox("Choose a model", model_names)
 
-# 🏡 Prediction Page
-if page == "🏡 Prediction":
-    st.title("🏡 House Price Prediction")
-    st.write("Enter house details and choose a model to predict the price.")
+# Load model
+model = joblib.load(f"{selected_model}.pkl")
 
-    # Inputs
-    area = st.number_input("Area (sqft)", min_value=100, max_value=10000, step=50)
-    bedrooms = st.number_input("Bedrooms", min_value=1, max_value=10)
-    bathrooms = st.number_input("Bathrooms", min_value=1, max_value=10)
+# Input form
+st.title("🏠 House Price Prediction Dashboard")
+st.write("Enter house specifications below:")
 
-    # Model selection
-    model_choice = st.selectbox("Choose a model", ["Linear Regression", "KNN", "Random Forest", "SVM"])
+with st.form("prediction_form"):
+    # Replace with your actual features
+    area = st.number_input("Area (sq ft)", min_value=100)
+    bedrooms = st.slider("Bedrooms", 1, 10, 3)
+    location = st.selectbox("Location", ["Urban", "Suburban", "Rural"])
+    submitted = st.form_submit_button("Predict")
 
-    # Load model
-    try:
-        with open(model_path[model_choice], 'rb') as f:
-            model = pickle.load(f)
-    except FileNotFoundError:
-        st.error(f"Model file for {model_choice} not found.")
-        st.stop()
+# Prepare input
+input_df = pd.DataFrame({
+    "area": [area],
+    "bedrooms": [bedrooms],
+    "location": [location]
+})
 
-    # Predict
-    if st.button("Predict Price"):
-        input_data = scaler.transform([[area, bedrooms, bathrooms]])
-        predicted_price = model.predict(input_data)[0]
-        st.success(f"{model_choice} Prediction: ${predicted_price:,.2f}")
+# Prediction
+if submitted:
+    prediction = model.predict(input_df)
 
-        # Display metrics
-        st.subheader("📊 Model Performance")
-        st.write(f"**R² Score:** {metrics[model_choice]['R²']}")
-        st.write(f"**Mean Squared Error:** {metrics[model_choice]['MSE']:,.2f}")
-        st.write(f"**F1 Score:** {metrics[model_choice]['F1']}")
+    if is_regression(selected_model):
+        price = prediction[0]
+        st.success(f"💰 Predicted Price: ${price:,.2f}")
 
-# 📊 Dashboard Page
-elif page == "📊 Dashboard":
-    st.header("📊 House Price Dashboard")
+        # Visualization: bar chart
+        st.subheader("📊 Price Breakdown")
+        fig, ax = plt.subplots()
+        ax.bar(["Predicted Price"], [price], color="skyblue")
+        ax.set_ylabel("Price ($)")
+        st.pyplot(fig)
 
-    # Load dataset
-    df = pd.read_csv("data/housing.csv")
+    else:
+        category_index = int(prediction[0])
+        category_label = le.inverse_transform([category_index])[0] if le else str(category_index)
+        st.success(f"🏷️ Predicted Category: {category_label}")
 
-    # Sidebar filters
-    st.sidebar.subheader("🔍 Filter Data")
-    min_price = int(df["price"].min())
-    max_price = int(df["price"].max())
-    price_range = st.sidebar.slider("Price Range", min_price, max_price, (min_price, max_price))
-    bedroom_filter = st.sidebar.multiselect("Bedrooms", sorted(df["bedrooms"].unique()), default=sorted(df["bedrooms"].unique()))
+        # Visualization: pie chart
+        st.subheader("📊 Category Distribution")
+        fig, ax = plt.subplots()
+        ax.pie([1], labels=[category_label], colors=["lightgreen"], autopct="%1.1f%%")
+        st.pyplot(fig)
 
-    # Apply filters
-    filtered_df = df[
-        (df["price"] >= price_range[0]) &
-        (df["price"] <= price_range[1]) &
-        (df["bedrooms"].isin(bedroom_filter))
-    ]
-
-    # Summary statistics
-    st.subheader("📌 Summary Statistics")
-    st.dataframe(filtered_df.describe())
-
-    # Price distribution
-    st.subheader("💰 Price Distribution")
-    fig1, ax1 = plt.subplots()
-    sns.histplot(filtered_df["price"], bins=30, kde=True, ax=ax1)
-    st.pyplot(fig1)
-
-    # Area vs Price
-    st.subheader("📐 Area vs Price")
-    fig2, ax2 = plt.subplots()
-    sns.scatterplot(data=filtered_df, x="area", y="price", ax=ax2)
-    st.pyplot(fig2)
-
-    # Bedrooms vs Price
-    st.subheader("🛏 Bedrooms vs Price")
-    avg_price_by_bedroom = filtered_df.groupby("bedrooms")["price"].mean().reset_index()
-    st.bar_chart(avg_price_by_bedroom.set_index("bedrooms"))
-
-    # Correlation heatmap (numeric only)
-    st.subheader("📊 Correlation Heatmap")
-    numeric_df = filtered_df.select_dtypes(include=["float64", "int64"])
-    fig_corr, ax_corr = plt.subplots()
-    sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm", ax=ax_corr)
-    st.pyplot(fig_corr)
-
-    # Model performance
-    st.subheader("📈 Model Comparison")
-    for model_name, scores in metrics.items():
-        st.markdown(f"**{model_name}**")
-        st.write(f"R²: {scores['R²']}")
-        st.write(f"MSE: {scores['MSE']:,.2f}")
-        st.write(f"F1 Score: {scores['F1']}")
-
-    # Feature importance (Random Forest)
-    st.subheader("🌲 Feature Importance (Random Forest)")
-    rf_model_path = model_path["Random Forest"]
-    with open(rf_model_path, 'rb') as f:
-        rf_model = pickle.load(f)
-
-    features = ["area", "bedrooms", "bathrooms"]
-    importances = rf_model.feature_importances_
-
-    fig_imp, ax_imp = plt.subplots()
-    sns.barplot(x=importances, y=features, ax=ax_imp)
-    ax_imp.set_title("Feature Importance")
-    st.pyplot(fig_imp)
 
 
 

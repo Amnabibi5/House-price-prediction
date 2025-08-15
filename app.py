@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-# Load label encoder for classification models
+# Load label encoder
 try:
-    le = joblib.load("label_encoder.pkl")
+    le = joblib.load("models/label_encoder.pkl")
 except:
     le = None
     st.warning("⚠️ Label encoder not found. Classification labels may not display correctly.")
@@ -18,7 +18,6 @@ model_names = [
     "LogisticRegression", "RandomForestClassifier", "GradientBoostingClassifier", "SVC"
 ]
 
-# Detect model type
 def is_regression(model_name):
     return model_name.endswith("Regressor") or model_name in ["LinearRegression", "Ridge", "Lasso"]
 
@@ -58,34 +57,61 @@ with st.form("prediction_form"):
     area = st.number_input("Area (sq ft)", min_value=100)
     bedrooms = st.slider("Bedrooms", 1, 10, 3)
     location = st.selectbox("Location", ["Urban", "Suburban", "Rural"])
+    bathrooms = st.slider("Bathrooms", 1, 5, 2)
+    stories = st.slider("Stories", 1, 3, 1)
+    parking = st.slider("Parking Spaces", 0, 3, 1)
+    guestroom = st.selectbox("Guest Room", ["Yes", "No"])
+    basement = st.selectbox("Basement", ["Yes", "No"])
+    hotwaterheating = st.selectbox("Hot Water Heating", ["Yes", "No"])
+    airconditioning = st.selectbox("Air Conditioning", ["Yes", "No"])
+    prefarea = st.selectbox("Preferred Area", ["Yes", "No"])
+    furnishingstatus = st.selectbox("Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"])
     submitted = st.form_submit_button("Predict")
 
 # Prepare input
 if submitted:
-    input_df = pd.DataFrame({
-        "area": [area],
-        "bedrooms": [bedrooms],
-        "location": [location]
-    })
+    input_dict = {
+        "area": area,
+        "bedrooms": bedrooms,
+        "location": location,
+        "bathrooms": bathrooms,
+        "stories": stories,
+        "parking": parking,
+        "guestroom": guestroom,
+        "basement": basement,
+        "hotwaterheating": hotwaterheating,
+        "airconditioning": airconditioning,
+        "prefarea": prefarea,
+        "furnishingstatus": furnishingstatus
+    }
 
-    # Encode location if label encoder is available
+    input_df = pd.DataFrame([input_dict])
+
+    # Encode categorical features
+    binary_map = {"Yes": 1, "No": 0}
+    for col in ["guestroom", "basement", "hotwaterheating", "airconditioning", "prefarea"]:
+        input_df[col] = input_df[col].map(binary_map)
+
     if le:
         try:
             input_df["location"] = le.transform(input_df["location"])
-        except:
+        except ValueError:
             st.warning("⚠️ Location encoding failed. Check if label encoder matches input categories.")
             st.stop()
     else:
         st.warning("⚠️ Location not encoded. Model may not perform correctly.")
 
     # Prediction
-    prediction = model.predict(input_df)
+    try:
+        prediction = model.predict(input_df)
+    except Exception as e:
+        st.error(f"❌ Prediction failed: {e}")
+        st.stop()
 
     if is_regression(selected_model):
         price = prediction[0]
         st.success(f"💰 Predicted Price: ${price:,.2f}")
 
-        # Visualization: bar chart
         st.subheader("📊 Price Breakdown")
         fig, ax = plt.subplots()
         ax.bar(["Predicted Price"], [price], color="skyblue")
@@ -97,11 +123,11 @@ if submitted:
         category_label = le.inverse_transform([category_index])[0] if le else str(category_index)
         st.success(f"🏷️ Predicted Category: {category_label}")
 
-        # Visualization: pie chart
         st.subheader("📊 Category Distribution")
         fig, ax = plt.subplots()
         ax.pie([1], labels=[category_label], colors=["lightgreen"], autopct="%1.1f%%")
         st.pyplot(fig)
+
 
 
 

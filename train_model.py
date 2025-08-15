@@ -1,75 +1,93 @@
 import pandas as pd
+import numpy as np
+import joblib
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.svm import SVR
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import r2_score, mean_squared_error, f1_score
-import pickle
-import os
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, LogisticRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, RandomForestClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
 
-# Load dataset
-df = pd.read_csv('data/housing.csv')
+# Load data
+df = pd.read_csv("Housing.csv")
+
+# Create price category for classification
+df["price_category"] = pd.cut(df["price"], bins=[0, 5000000, 10000000, np.inf],
+                              labels=["Low", "Medium", "High"])
+
+# Targets
+y_reg = df["price"]
+y_clf = df["price_category"]
+
+# Features
+X = df.drop(columns=["price", "price_category"])
+numerical_features = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
+categorical_features = X.select_dtypes(include=["object"]).columns.tolist()
 
 # Preprocessing
-df.drop_duplicates(inplace=True)
-df.dropna(inplace=True)
-df = df[df['price'] < df['price'].quantile(0.95)]
-df['price_per_sqft'] = df['price'] / df['area']
+numeric_transformer = Pipeline([("scaler", StandardScaler())])
+categorical_transformer = Pipeline([("encoder", OneHotEncoder(handle_unknown="ignore"))])
+preprocessor = ColumnTransformer([
+    ("num", numeric_transformer, numerical_features),
+    ("cat", categorical_transformer, categorical_features)
+])
 
-# Scale features
-scaler = StandardScaler()
-scaled_features = scaler.fit_transform(df[['area', 'bedrooms', 'bathrooms']])
-X = pd.DataFrame(scaled_features, columns=['area', 'bedrooms', 'bathrooms'])
-y = df['price']
-
-# Train-test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Models
-models = {
-    'Linear Regression': LinearRegression(),
-    'KNN': KNeighborsRegressor(),
-    'Random Forest': RandomForestRegressor(random_state=42),
-    'SVM': SVR()
+# Regression models
+regression_models = {
+    "LinearRegression": LinearRegression(),
+    "Ridge": Ridge(),
+    "Lasso": Lasso(),
+    "RandomForestRegressor": RandomForestRegressor(),
+    "GradientBoostingRegressor": GradientBoostingRegressor()
 }
 
-metrics = {}
+# Classification models
+classification_models = {
+    "LogisticRegression": LogisticRegression(max_iter=1000),
+    "RandomForestClassifier": RandomForestClassifier(),
+    "GradientBoostingClassifier": GradientBoostingClassifier(),
+    "SVC": SVC()
+}
 
-# Train and save each model
-os.makedirs('model', exist_ok=True)
+# Save performance metrics
+results = []
 
-for name, model in models.items():
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
+# Train regression models
+for name, model in regression_models.items():
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor),
+        ("regressor", model)
+    ])
+    X_train, X_test, y_train, y_test = train_test_split(X, y_reg, test_size=0.2, random_state=42)
+    pipeline.fit(X_train, y_train)
+    joblib.dump(pipeline, f"{name}.pkl")
 
-    # Save model
-    with open(f'model/{name.lower().replace(" ", "_")}_model.pkl', 'wb') as f:
-        pickle.dump(model, f)
-
-    # Metrics
+    y_pred = pipeline.predict(X_test)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
-    mse = mean_squared_error(y_test, y_pred)
-    y_test_class = (y_test > y.median()).astype(int)
-    y_pred_class = (y_pred > y.median()).astype(int)
-    f1 = f1_score(y_test_class, y_pred_class)
+    results.append({"model": name, "type": "regression", "score": rmse})
 
-    metrics[name] = {
-        'R²': round(r2, 2),
-        'MSE': round(mse, 2),
-        'F1': round(f1, 2)
-    }
+# Encode classification target
+le = LabelEncoder()
+y_clf_encoded = le.fit_transform(y_clf)
+joblib.dump(le, "label_encoder.pkl")
 
-# Save scaler and metrics
-with open('model/scaler.pkl', 'wb') as f:
-    pickle.dump(scaler, f)
+# Train classification models
+for name, model in classification_models.items():
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor),
+        ("classifier", model)
+    ])
+    X_train, X_test, y_train, y_test = train_test_split(X, y_clf_encoded, test_size=0.2, random_state=42)
+    pipeline.fit(X_train, y_train)
+    joblib.dump(pipeline, f"{name}.pkl")
 
-with open('model/metrics.pkl', 'wb') as f:
-    pickle.dump(metrics, f)
+    y_pred = pipeline.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    results.append({"model": name, "type": "classification", "score": acc})
 
-print("✅ Models, scaler, and metrics saved successfully.")
-# Display metrics
-print("Model Performance Metrics:")
-for name, metric in metrics.items():
-    print(f"{name}: R²={metric['R²']}, MSE={metric['MSE']}, F1={metric['F1']}")
+# Save metrics
+pd.DataFrame(results).to_csv("metrics.csv", index=False)
+

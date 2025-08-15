@@ -9,7 +9,10 @@ from sklearn.linear_model import LinearRegression, Ridge, Lasso, LogisticRegress
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
-
+import os
+import pickle
+from sklearn.linear_model import LinearRegression
+from sklearn.datasets import make_regression
 # Load data
 df = pd.read_csv("Housing.csv")
 
@@ -90,4 +93,22 @@ for name, model in classification_models.items():
 
 # Save metrics
 pd.DataFrame(results).to_csv("metrics.csv", index=False)
+
+
+# Create synthetic data
+X, y = make_regression(n_samples=100, n_features=1, noise=0.1)
+
+# Train model
+model = LinearRegression()
+model.fit(X, y)
+
+# Ensure models folder exists
+os.makedirs("models", exist_ok=True)
+
+# Save model as .pkl
+with open("models/linear_model.pkl", "wb") as f:
+    pickle.dump(model, f)
+
+print("Model saved to models/linear_model.pkl")
+
 

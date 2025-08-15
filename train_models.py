@@ -86,5 +86,18 @@ for name, model in classification_models.items():
         ("classifier", model)
     ])
     X_train, X_test, y_train, y_test = train_test_split(X, y_clf_encoded, test_size=0.2, random_state=42)
+    pipeline.fit(X_train, y_train)
+    joblib.dump(pipeline, f"models/{name}.pkl")
+
+    y_pred = pipeline.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    results.append({"model": name, "type": "classification", "accuracy": acc})
+
+# Save metrics
+pd.DataFrame(results).to_csv("models/metrics.csv", index=False)
+
+print("✅ All models and encoder saved to 'models/' folder.")
+vv
+
 
 

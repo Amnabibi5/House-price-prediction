@@ -38,5 +38,4 @@ jobs:
         git add models/*.pkl metrics.csv
         git commit -m "Auto-update trained models"
         git push
-
     

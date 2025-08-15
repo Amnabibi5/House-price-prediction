@@ -3,12 +3,14 @@ import pandas as pd
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 # Load label encoder for classification models
 try:
     le = joblib.load("label_encoder.pkl")
 except:
     le = None
+    st.warning("⚠️ Label encoder not found. Classification labels may not display correctly.")
 
 # Model options
 model_names = [
@@ -40,32 +42,43 @@ selected_model = st.sidebar.selectbox(
     format_func=lambda name: f"{name} — {model_descriptions.get(name, '')}"
 )
 
-
 # Load model
-model = joblib.load(f"models/{selected_model}.pkl")
+model_path = f"models/{selected_model}.pkl"
+if not os.path.exists(model_path):
+    st.error(f"❌ Model file '{selected_model}.pkl' not found in 'models/' folder.")
+    st.stop()
 
-
+model = joblib.load(model_path)
 
 # Input form
 st.title("🏠 House Price Prediction Dashboard")
 st.write("Enter house specifications below:")
 
 with st.form("prediction_form"):
-    # Replace with your actual features
     area = st.number_input("Area (sq ft)", min_value=100)
     bedrooms = st.slider("Bedrooms", 1, 10, 3)
     location = st.selectbox("Location", ["Urban", "Suburban", "Rural"])
     submitted = st.form_submit_button("Predict")
 
 # Prepare input
-input_df = pd.DataFrame({
-    "area": [area],
-    "bedrooms": [bedrooms],
-    "location": [location]
-})
-
-# Prediction
 if submitted:
+    input_df = pd.DataFrame({
+        "area": [area],
+        "bedrooms": [bedrooms],
+        "location": [location]
+    })
+
+    # Encode location if label encoder is available
+    if le:
+        try:
+            input_df["location"] = le.transform(input_df["location"])
+        except:
+            st.warning("⚠️ Location encoding failed. Check if label encoder matches input categories.")
+            st.stop()
+    else:
+        st.warning("⚠️ Location not encoded. Model may not perform correctly.")
+
+    # Prediction
     prediction = model.predict(input_df)
 
     if is_regression(selected_model):
@@ -89,6 +102,8 @@ if submitted:
         fig, ax = plt.subplots()
         ax.pie([1], labels=[category_label], colors=["lightgreen"], autopct="%1.1f%%")
         st.pyplot(fig)
+
+
 
 
 

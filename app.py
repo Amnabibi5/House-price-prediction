@@ -22,7 +22,24 @@ def is_regression(model_name):
 
 # Sidebar
 st.sidebar.title("🔍 Model Selection")
-selected_model = st.sidebar.selectbox("Choose a model", model_names)
+model_descriptions = {
+    "LinearRegression": "Simple linear model for price prediction",
+    "Ridge": "Linear model with L2 regularization",
+    "Lasso": "Linear model with L1 regularization",
+    "RandomForestRegressor": "Ensemble of decision trees (regression)",
+    "GradientBoostingRegressor": "Boosted trees for better accuracy",
+    "LogisticRegression": "Simple classifier for price category",
+    "RandomForestClassifier": "Ensemble classifier for categories",
+    "GradientBoostingClassifier": "Boosted classifier for categories",
+    "SVC": "Support Vector Classifier"
+}
+
+selected_model = st.sidebar.selectbox(
+    "🔍 Choose a model",
+    model_names,
+    format_func=lambda name: f"{name} — {model_descriptions.get(name, '')}"
+)
+
 
 # Load model
 model = joblib.load(f"{selected_model}.pkl")
@@ -70,6 +87,7 @@ if submitted:
         fig, ax = plt.subplots()
         ax.pie([1], labels=[category_label], colors=["lightgreen"], autopct="%1.1f%%")
         st.pyplot(fig)
+
 
 
 

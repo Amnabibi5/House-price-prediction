@@ -86,7 +86,7 @@ def preprocess_input(df):
                 df_encoded[col] = 0
         df_encoded = df_encoded[feature_cols]
 
-        # 🧪 Debug info only when feature_cols exist
+        # 🧪 Debug info
         st.write("🧪 Input columns:", df_encoded.columns.tolist())
         st.write("🧪 Expected columns:", feature_cols)
 
@@ -97,12 +97,18 @@ def preprocess_input(df):
         if extra:
             st.warning(f"🚨 Unexpected columns: {extra}")
     else:
-        st.info("⚠️ No saved feature columns found — using current input features only.")
-        st.write("🧪 Input columns:", df_encoded.columns.tolist())
+        st.info("⚠️ No saved feature columns found — using scaler.feature_names_in_ instead.")
+        if hasattr(scaler, "feature_names_in_"):
+            for col in scaler.feature_names_in_:
+                if col not in df_encoded.columns:
+                    df_encoded[col] = 0
+            df_encoded = df_encoded[scaler.feature_names_in_]
+            st.write("🧪 Input aligned to scaler.feature_names_in_: ", scaler.feature_names_in_)
 
-    # Ensure column order and types match
+    # Ensure float dtype
     df_encoded = df_encoded.astype(float)
 
+    # ✅ Now scaler and input features match
     df_scaled = scaler.transform(df_encoded)
     return df_scaled, df_encoded
 
@@ -178,5 +184,7 @@ with tab2:
     input_scaled, input_encoded = preprocess_input(input_df)
     if st.button("🔍 Predict Category"):
         predict_and_display(classification_models, input_scaled, input_encoded, task="classification")
+
+
 
 

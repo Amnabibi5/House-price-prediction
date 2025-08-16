@@ -1,8 +1,10 @@
+plotly==5.17.0
 streamlit
 pandas
 scikit-learn
 numpy
 matplotlib
+
 
 
 

@@ -1,30 +1,34 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 import os
+import matplotlib.pyplot as plt
 
-# Define models
-regression_models = {
-    "Linear Regression": "models/LinearRegression.pkl"
-}
+# 📁 Load models and artifacts
+model_dir = "models"
+artifact_dir = "artifacts"
 
-classification_models = {
-    "KNN": "models/KNN.pkl",
-    "Random Forest": "models/RandomForestClassifier.pkl",
-    "SVM": "models/SVM.pkl"
-}
+scaler = joblib.load(os.path.join(artifact_dir, "scaler.pkl"))
+label_encoder_path = os.path.join(artifact_dir, "label_encoder.pkl")
+label_encoder = joblib.load(label_encoder_path) if os.path.exists(label_encoder_path) else None
+metrics_path = os.path.join(artifact_dir, "metrics.csv")
+metrics_df = pd.read_csv(metrics_path) if os.path.exists(metrics_path) else pd.DataFrame()
+feature_cols_path = os.path.join(artifact_dir, "feature_columns.pkl")
+feature_cols = joblib.load(feature_cols_path) if os.path.exists(feature_cols_path) else None
 
-# Load label encoder if needed
-def load_encoder(path):
-    if os.path.exists(path):
-        return joblib.load(path)
-    return None
+regression_models = [f for f in os.listdir(model_dir) if "LinearRegression" in f]
+classification_models = [f for f in os.listdir(model_dir) if f.endswith(".pkl") and f not in regression_models]
 
-location_encoder = load_encoder("models/location_encoder.pkl")
+# 🎨 App layout
+st.set_page_config(page_title="House Price Prediction", layout="wide")
+st.title("🏠 House Price Prediction Dashboard")
 
-# Input form
+tab1, tab2 = st.tabs(["📈 Regression Models", "🧠 Classification Models"])
+
+# 📋 Input form
 def get_user_input():
-    st.subheader("📋 House Features")
+    st.subheader("📋 Enter House Details")
     area = st.number_input("📐 Area (sq ft)", min_value=500, max_value=10000, step=50)
     bedrooms = st.selectbox("🛏 Bedrooms", [1, 2, 3, 4, 5])
     bathrooms = st.selectbox("🛁 Bathrooms", [1, 2, 3, 4])
@@ -37,7 +41,6 @@ def get_user_input():
     prefarea = st.selectbox("🌟 Preferred Area", ["Yes", "No"])
     furnishingstatus = st.selectbox("🪑 Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"])
     mainroad = st.selectbox("🛣 Main Road Access", ["Yes", "No"])
-    location = st.selectbox("📍 Location", location_encoder.classes_ if location_encoder else ["Unknown"])
 
     input_dict = {
         "area": area,
@@ -51,76 +54,94 @@ def get_user_input():
         "airconditioning": airconditioning,
         "prefarea": prefarea,
         "furnishingstatus": furnishingstatus,
-        "mainroad": mainroad,
-        "location": location
+        "mainroad": mainroad
     }
 
     return pd.DataFrame([input_dict])
 
-# Preprocess input
+# 🧼 Preprocess input
 def preprocess_input(df):
     binary_map = {"Yes": 1, "No": 0}
     for col in ["guestroom", "basement", "hotwaterheating", "airconditioning", "prefarea", "mainroad"]:
         df[col] = df[col].map(binary_map)
-
-    if location_encoder:
-        df["location"] = location_encoder.transform(df["location"])
-
-    df = df.astype({
-        "area": "float64",
-        "bedrooms": "int64",
-        "bathrooms": "int64",
-        "stories": "int64",
-        "parking": "int64",
-        "guestroom": "int64",
-        "basement": "int64",
-        "hotwaterheating": "int64",
-        "airconditioning": "int64",
-        "prefarea": "int64",
-        "mainroad": "int64",
-        "location": "int64"
-    })
-
     df["furnishingstatus"] = df["furnishingstatus"].astype(str)
-    return df
+    df_encoded = pd.get_dummies(df, drop_first=True)
 
-# Predict
-def predict_with_models(models, input_df, task="regression"):
-    results = {}
-    for name, path in models.items():
-        if not os.path.exists(path):
-            results[name] = "❌ Model file not found"
-            continue
+    # Align with training columns
+    if feature_cols:
+        for col in feature_cols:
+            if col not in df_encoded.columns:
+                df_encoded[col] = 0
+        df_encoded = df_encoded[feature_cols]
+
+    df_scaled = scaler.transform(df_encoded)
+    return df_scaled, df_encoded
+
+# 📊 Feature Importance Plot
+def plot_feature_importance(model, model_name, input_df):
+    if hasattr(model, "feature_importances_"):
+        importances = model.feature_importances_
+        features = input_df.columns
+    elif hasattr(model, "coef_"):
+        importances = model.coef_
+        features = input_df.columns
+    else:
+        st.info(f"ℹ️ Feature importance not available for {model_name}")
+        return
+
+    st.subheader(f"🧠 Feature Importance: {model_name}")
+    fig, ax = plt.subplots()
+    sorted_idx = np.argsort(importances)
+    ax.barh(np.array(features)[sorted_idx], np.array(importances)[sorted_idx], color="lightgreen")
+    ax.set_xlabel("Importance Score")
+    st.pyplot(fig)
+
+# 🔍 Predict and display
+def predict_and_display(models, input_scaled, input_encoded, task):
+    predictions = {}
+    for model_file in models:
+        model_name = model_file.replace(".pkl", "")
+        model_path = os.path.join(model_dir, model_file)
         try:
-            model = joblib.load(path)
-            prediction = model.predict(input_df)[0]
-            results[name] = prediction
+            model = joblib.load(model_path)
+            pred = model.predict(input_scaled)[0]
+            if task == "classification" and label_encoder:
+                pred = label_encoder.inverse_transform([int(pred)])[0]
+            predictions[model_name] = pred
+
+            with st.expander(f"📊 Feature Importance for {model_name}"):
+                plot_feature_importance(model, model_name, input_encoded)
+
         except Exception as e:
-            results[name] = f"❌ Error: {e}"
-    return results
+            predictions[model_name] = f"❌ Error: {e}"
 
-# Main app
-st.title("🔍 House Model Comparison App")
+    st.subheader("🔮 Predictions")
+    for name, value in predictions.items():
+        st.write(f"**{name}**: {value if task == 'classification' else f'PKR {value:,.0f}'}")
 
-tab1, tab2 = st.tabs(["📈 Regression", "🧠 Classification"])
+    if all(isinstance(v, (int, float, np.number)) for v in predictions.values()):
+        st.subheader("📊 Model Comparison")
+        fig, ax = plt.subplots()
+        ax.bar(predictions.keys(), predictions.values(), color="skyblue")
+        ax.set_ylabel("Price (PKR)" if task == "regression" else "Class")
+        ax.set_title("Predicted Output by Model")
+        st.pyplot(fig)
 
+    if not metrics_df.empty:
+        st.subheader("📐 Model Performance Metrics")
+        filtered = metrics_df[metrics_df["Model"].isin(predictions.keys())]
+        st.dataframe(filtered.style.format({"RMSE": "{:,.0f}", "R2": "{:.2f}", "Accuracy": "{:.2f}"}))
+
+# 🧠 Tabs
 with tab1:
-    st.header("Compare Regression Models")
     input_df = get_user_input()
-    input_df = preprocess_input(input_df)
+    input_scaled, input_encoded = preprocess_input(input_df)
     if st.button("🔍 Predict Price"):
-        results = predict_with_models(regression_models, input_df)
-        for model, output in results.items():
-            st.write(f"**{model}**: {output if isinstance(output, str) else f'PKR {output:,.0f}'}")
+        predict_and_display(regression_models, input_scaled, input_encoded, task="regression")
 
 with tab2:
-    st.header("Compare Classification Models")
     input_df = get_user_input()
-    input_df = preprocess_input(input_df)
+    input_scaled, input_encoded = preprocess_input(input_df)
     if st.button("🔍 Predict Category"):
-        results = predict_with_models(classification_models, input_df, task="classification")
-        for model, output in results.items():
-            st.write(f"**{model}**: {output}")
-
-
+        predict_and_display(classification_models, input_scaled, input_encoded, task="classification")
 

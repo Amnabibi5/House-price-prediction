@@ -78,9 +78,15 @@ def preprocess_input(df):
     # Ensure column order and types match
     df_encoded = df_encoded.astype(float)
 
-    # Optional debug info
+    # 🧪 Debug info
     st.write("🧪 Input columns:", df_encoded.columns.tolist())
     st.write("🧪 Expected columns:", feature_cols)
+    missing = set(feature_cols) - set(df_encoded.columns)
+    extra = set(df_encoded.columns) - set(feature_cols)
+    if missing:
+        st.warning(f"🚨 Missing columns: {missing}")
+    if extra:
+        st.warning(f"🚨 Unexpected columns: {extra}")
 
     df_scaled = scaler.transform(df_encoded)
     return df_scaled, df_encoded

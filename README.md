@@ -1,81 +1,88 @@
-## 📖 About the Project
+# 🏡 House Price Prediction Dashboard
 
-This project is a machine learning-powered web app that predicts house prices based on user input and provides interactive data insights through a dashboard.
+An interactive, production-ready Streamlit app for predicting house prices using machine learning. Built with reproducibility, modularity, and user experience in mind, this project showcases automated model training, feature importance visualization, and real-time predictions—all deployed seamlessly via Streamlit Cloud.
 
-Users can:
-- Enter property details (area, bedrooms, bathrooms)
-- Choose from multiple ML models to predict house prices
-- View model performance metrics (R², MSE, F1 Score)
-- Explore a dashboard with charts, filters, and feature analysis
-
-The dashboard includes:
-- 📊 Summary statistics and price distribution
-- 📐 Area vs Price scatter plot
-- 🛏 Bedrooms vs Price bar chart
-- 🔍 Filters for price range and bedroom count
-- 🌡️ Correlation heatmap of numeric features
-- 🌲 Feature importance visualization (Random Forest)
-
-This project demonstrates Amna’s ability to:
-- Build and deploy ML models with Streamlit
-- Create user-friendly interfaces and dashboards
-- Organize code and assets ethically and clearly
-- Troubleshoot deployment issues and present polished work
-
-
-# 🏡 House Price Prediction App
-
-This Streamlit web app predicts house prices based on user input using multiple machine learning models.  
-It’s built with Python, scikit-learn, and Streamlit, and deployed live via Streamlit Cloud.
+🔗 **Live App**: [Streamlit Dashboard](https://house-price-prediction-tuvtktrzvhkkmc3vh6ztna.streamlit.app/)  
+📁 **Source Code**: [GitHub Repository](https://github.com/Amnabibi5/House-price-prediction)
 
 ---
+
+## 📌 Project Overview
+
+This dashboard allows users to:
+- Input property features and receive instant price predictions
+- Compare multiple regression models (e.g., Linear Regression, Random Forest, XGBoost)
+- Visualize feature importance and model performance
+- Explore a clean, responsive UI with tooltips and expanders for accessibility
+
+Designed for deployment and scalability, the app integrates:
+- Modular ML pipelines
+- Automated preprocessing and scaling
+- Robust error handling and UI polish
+
+---
+
+## 🧠 Machine Learning Workflow
+
+### 🔍 Data Preprocessing
+- Feature selection and alignment
+- Handling missing values
+- Scaling with `StandardScaler`
+- Encoding categorical variables (if applicable)
+
+### ⚙️ Model Training
+- Multiple models trained and evaluated:
+  - Linear Regression
+  - Random Forest Regressor
+  - XGBoost Regressor
+- Metrics logged: MAE, RMSE, R²
+
+### 📊 Model Comparison
+- Visual comparison of model performance
+- Feature importance via SHAP or model coefficients
+- Selection of best-performing model for deployment
+
+---
+
+## 🚀 Deployment
+
+- **Platform**: [Streamlit Cloud](https://streamlit.io/cloud)
+- **Automation**: GitHub Actions for CI/CD (optional)
+- **UI Features**:
+  - Expanders for model details
+  - Tooltips for feature descriptions
+  - Error handling for invalid inputs
+
+---
+
+## 🛠️ Tech Stack
+
+| Tool/Library     | Purpose                              |
+|------------------|--------------------------------------|
+| Python           | Core programming language            |
+| Pandas, NumPy    | Data manipulation                    |
+| Scikit-learn     | ML models and preprocessing          |
+| XGBoost          | Gradient boosting model              |
+| Streamlit        | Dashboard development and deployment |
+| Matplotlib       | Visualizations                       |
+
+---
+
+## 📂 Repository Structure
+
+├── app.py # Streamlit app entry point ├── models/ # Saved models and scalers ├── utils/ # Helper functions for preprocessing and prediction ├── data/ # Dataset (if included) ├── requirements.txt # Python dependencies ├── README.md # Project documentation
+
+## 📸 Dashboard Preview
+
+![House Price Prediction Dashboard](assets/screenshot.png)
 
 ## 🚀 Live Demo
 
-👉 [Try the App Here] (https://house-price-prediction-tuvtktrzvhkkmc3vh6ztna.streamlit.app/)
+👉 [Streamlit App]((https://house-price-prediction-tuvtktrzvhkkmc3vh6ztna.streamlit.app/)
 
----
-
-## 📦 Features
-
-- Predict house prices using:
-  - Linear Regression
-  - K-Nearest Neighbors (KNN)
-  - Random Forest
-  - Support Vector Machine (SVM)
-- Scaled input features for better accuracy
-- Model performance metrics (R², MSE, F1 Score)
-- Clean UI with interactive inputs
-
----
-
-## 🧠 Technologies Used
-
-- Python
-- scikit-learn
-- pandas
-- Streamlit
-- pickle
-- GitHub
-
----
-# 🏡 House Price Prediction App
-
-[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://house-price-prediction-tuvtktrzvhkkmc3vh6ztna.streamlit.app/)
-
----
-
-## 📸 Screenshot
-
-![App Screenshot](images/app_screenshot.png)
-## 📸 Updated Dashboard Screenshot
-
-![Dashboard Screenshot](images/dashboard_screenshot.png)
-![Updated](https://img.shields.io/badge/Updated-Dashboard-blue)
+[![View Demo](https://img.shields.io/badge/Live-Demo-green?style=for-the-badge&logo=streamlit)](https://house-price-prediction-tuvtktrzvhkkmc3vh6ztna.streamlit.app/)
 
 
 
-
-## 📁 Project Structure
 
 

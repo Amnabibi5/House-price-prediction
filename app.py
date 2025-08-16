@@ -4,14 +4,14 @@ import joblib
 import os
 import matplotlib.pyplot as plt
 
-# Available models and their filenames
+# Available models and filenames
 model_options = {
     "Linear Regression": "LinearRegression.pkl",
     "Ridge Regression": "Ridge.pkl",
     "Random Forest": "RandomForestRegressor.pkl"
 }
 
-# Precomputed performance metrics (example values)
+# Precomputed performance metrics
 model_metrics = {
     "Linear Regression": {"RMSE": 1200000, "R²": 0.82},
     "Ridge Regression": {"RMSE": 1180000, "R²": 0.83},
@@ -82,6 +82,23 @@ if st.button("🔍 Compare Predictions"):
         st.error(f"❌ Location encoding failed: {e}")
         st.stop()
 
+    # Fix data types to avoid ufunc 'isnan' error
+    input_df = input_df.astype({
+        "area": "float64",
+        "bedrooms": "int64",
+        "bathrooms": "int64",
+        "stories": "int64",
+        "parking": "int64",
+        "guestroom": "int64",
+        "basement": "int64",
+        "hotwaterheating": "int64",
+        "airconditioning": "int64",
+        "prefarea": "int64",
+        "mainroad": "int64",
+        "location": "int64",
+        "furnishingstatus": "object"
+    })
+
     # Predict with all models
     predictions = {}
     for model_name, filename in model_options.items():
@@ -114,4 +131,6 @@ if st.button("🔍 Compare Predictions"):
     st.subheader("📐 Model Performance Metrics")
     metrics_df = pd.DataFrame(model_metrics).T
     st.dataframe(metrics_df.style.format({"RMSE": "{:,.0f}", "R²": "{:.2f}"}))
+
+
 

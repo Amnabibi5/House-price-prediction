@@ -3,7 +3,7 @@ name: Train Models
 on:
   push:
     paths:
-      - 'data/house_data.csv'
+      - 'data/housing.csv'
       - 'train_models.py'
 
 jobs:

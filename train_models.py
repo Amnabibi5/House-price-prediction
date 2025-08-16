@@ -14,23 +14,7 @@ os.makedirs("models", exist_ok=True)
 os.makedirs("artifacts", exist_ok=True)
 
 # 📥 Load dataset
-df = pd.read_csv("from sklearn.svm import SVC
-from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
-import pandas as pd
-import numpy as np
-import os
-import joblib
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier
-# 📁 Ensure folders exist
-os.makedirs("models", exist_ok=True)
-os.makedirs("artifacts", exist_ok=True)
-
-# 📥 Load dataset
-df = pd.read_csv("data/house_data.csv")
+df = pd.read_csv("data/housing.csv")
 
 
 # 🧠 Define your target column
@@ -179,6 +163,7 @@ metrics_df = pd.DataFrame(metrics)
 metrics_df.to_csv("artifacts/metrics.csv", index=False)
 
 print(f"✅ Training complete.\n📦 Models saved in /models\n📊 Metrics saved in /artifacts")
+
 
 
 

@@ -1,102 +1,80 @@
-import os
 import pandas as pd
 import numpy as np
+import os
 import joblib
-
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LinearRegression, Ridge, Lasso, LogisticRegression
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, RandomForestClassifier, GradientBoostingClassifier
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
 
-# Ensure models folder exists
+# 📁 Create folders if not exist
 os.makedirs("models", exist_ok=True)
+os.makedirs("artifacts", exist_ok=True)
 
-# Load data
-df = pd.read_csv("data/housing.csv")
+# 📥 Load data
+df = pd.read_csv("data/house_data.csv")
 
-# Create price category for classification
-df["price_category"] = pd.cut(df["price"], bins=[0, 5000000, 10000000, np.inf],
-                              labels=["Low", "Medium", "High"])
+# 🧹 Preprocessing
+X = df.drop("target", axis=1)
+y = df["target"]
 
-# Targets
-y_reg = df["price"]
-y_clf = df["price_category"]
+# Detect task type
+task_type = "regression" if y.dtype in [np.float64, np.int64] and len(y.unique()) > 10 else "classification"
 
-# Features
-X = df.drop(columns=["price", "price_category"])
-numerical_features = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
-categorical_features = X.select_dtypes(include=["object"]).columns.tolist()
+# Encode labels if classification
+if task_type == "classification":
+    le = LabelEncoder()
+    y = le.fit_transform(y)
+    joblib.dump(le, "artifacts/label_encoder.pkl")
 
-# Preprocessing
-numeric_transformer = Pipeline([("scaler", StandardScaler())])
-categorical_transformer = Pipeline([("encoder", OneHotEncoder(handle_unknown="ignore"))])
-preprocessor = ColumnTransformer([
-    ("num", numeric_transformer, numerical_features),
-    ("cat", categorical_transformer, categorical_features)
-])
+# Split and scale
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+joblib.dump(scaler, "artifacts/scaler.pkl")
 
-# Regression models
-regression_models = {
-    "LinearRegression": LinearRegression(),
-    "Ridge": Ridge(),
-    "Lasso": Lasso(),
-    "RandomForestRegressor": RandomForestRegressor(),
-    "GradientBoostingRegressor": GradientBoostingRegressor()
+# 📊 Model definitions
+models = {
+    "regression": {
+        "LinearRegression": LinearRegression()
+    },
+    "classification": {
+        "KNeighborsClassifier": KNeighborsClassifier(),
+        "RandomForestClassifier": RandomForestClassifier(random_state=42),
+        "SVC": SVC(probability=True)
+    }
 }
 
-# Classification models
-classification_models = {
-    "LogisticRegression": LogisticRegression(max_iter=1000),
-    "RandomForestClassifier": RandomForestClassifier(),
-    "GradientBoostingClassifier": GradientBoostingClassifier(),
-    "SVC": SVC()
-}
+# 📈 Train and evaluate
+metrics = []
 
-# Save performance metrics
-results = []
+for name, model in models[task_type].items():
+    model.fit(X_train_scaled, y_train)
+    y_pred = model.predict(X_test_scaled)
 
-# Train regression models
-for name, model in regression_models.items():
-    pipeline = Pipeline([
-        ("preprocessor", preprocessor),
-        ("regressor", model)
-    ])
-    X_train, X_test, y_train, y_test = train_test_split(X, y_reg, test_size=0.2, random_state=42)
-    pipeline.fit(X_train, y_train)
-    joblib.dump(pipeline, f"models/{name}.pkl")
+    # Save model
+    joblib.dump(model, f"models/{name}.pkl")
 
-    y_pred = pipeline.predict(X_test)
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    r2 = r2_score(y_test, y_pred)
-    results.append({"model": name, "type": "regression", "rmse": rmse, "r2": r2})
+    # Evaluate
+    if task_type == "regression":
+        rmse = mean_squared_error(y_test, y_pred, squared=False)
+        r2 = r2_score(y_test, y_pred)
+        metrics.append({"Model": name, "RMSE": rmse, "R2": r2})
+    else:
+        acc = accuracy_score(y_test, y_pred)
+        metrics.append({"Model": name, "Accuracy": acc})
 
-# Encode classification target
-le = LabelEncoder()
-y_clf_encoded = le.fit_transform(y_clf)
-joblib.dump(le, "models/label_encoder.pkl")
+# 📁 Save metrics
+metrics_df = pd.DataFrame(metrics)
+metrics_df.to_csv("artifacts/metrics.csv", index=False)
 
-# Train classification models
-for name, model in classification_models.items():
-    pipeline = Pipeline([
-        ("preprocessor", preprocessor),
-        ("classifier", model)
-    ])
-    X_train, X_test, y_train, y_test = train_test_split(X, y_clf_encoded, test_size=0.2, random_state=42)
-    pipeline.fit(X_train, y_train)
-    joblib.dump(pipeline, f"models/{name}.pkl")
+print(f"✅ Training complete. Models saved in /models, metrics in /artifacts.")
 
-    y_pred = pipeline.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
-    results.append({"model": name, "type": "classification", "accuracy": acc})
 
-# Save metrics
-pd.DataFrame(results).to_csv("models/metrics.csv", index=False)
-
-print("✅ All models and encoder saved to 'models/' folder.")
 
 
 

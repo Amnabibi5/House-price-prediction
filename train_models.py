@@ -15,7 +15,7 @@ os.makedirs("models", exist_ok=True)
 os.makedirs("artifacts", exist_ok=True)
 
 # 📥 Load data
-df = pd.read_csv("data/house_data.csv")
+df = pd.read_csv("data/housing.csv")
 
 # 🧹 Preprocessing
 X = df.drop("target", axis=1)
@@ -73,6 +73,7 @@ metrics_df = pd.DataFrame(metrics)
 metrics_df.to_csv("artifacts/metrics.csv", index=False)
 
 print(f"✅ Training complete. Models saved in /models, metrics in /artifacts.")
+
 
 
 

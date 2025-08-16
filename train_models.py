@@ -14,7 +14,7 @@ os.makedirs("models", exist_ok=True)
 os.makedirs("artifacts", exist_ok=True)
 
 # 📥 Load dataset
-df = pd.read_csv("/data/housing.csv")
+df = pd.read_csv("data/housing.csv")
 
 
 # 🧠 Define your target column
@@ -89,6 +89,7 @@ metrics_df = pd.DataFrame(metrics)
 metrics_df.to_csv("artifacts/metrics.csv", index=False)
 
 print(f"✅ Training complete.\n📦 Models saved in /models\n📊 Metrics saved in /artifacts")
+
 
 
 

@@ -10,13 +10,24 @@ model_dir = "models"
 artifact_dir = "artifacts"
 
 scaler = joblib.load(os.path.join(artifact_dir, "scaler.pkl"))
+
+# 🧠 Load label encoder (optional)
 label_encoder_path = os.path.join(artifact_dir, "label_encoder.pkl")
 label_encoder = joblib.load(label_encoder_path) if os.path.exists(label_encoder_path) else None
+
+# 📊 Load metrics
 metrics_path = os.path.join(artifact_dir, "metrics.csv")
 metrics_df = pd.read_csv(metrics_path) if os.path.exists(metrics_path) else pd.DataFrame()
-feature_cols_path = os.path.join(artifact_dir, "feature_columns.pkl")
-feature_cols = joblib.load(feature_cols_path) if os.path.exists(feature_cols_path) else None
 
+# 📐 Load feature columns and ensure it's a list
+feature_cols_path = os.path.join(artifact_dir, "feature_columns.pkl")
+if os.path.exists(feature_cols_path):
+    raw_cols = joblib.load(feature_cols_path)
+    feature_cols = raw_cols.tolist() if isinstance(raw_cols, np.ndarray) else raw_cols
+else:
+    feature_cols = None
+
+# 📦 Model lists
 regression_models = [f for f in os.listdir(model_dir) if "LinearRegression" in f]
 classification_models = [f for f in os.listdir(model_dir) if f.endswith(".pkl") and f not in regression_models]
 

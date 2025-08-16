@@ -99,20 +99,58 @@ def load_model(model_name):
         st.error(f"❌ Model {model_name} not found.")
         return None
 
-def prepare_input_features(input_data, original_df, target_col):
-    """Prepare input features to match training format"""
-    # Create a copy of original data structure
-    sample_row = original_df.drop(target_col, axis=1).iloc[0:1].copy()
-    
-    # Update with user inputs
-    for col, value in input_data.items():
-        if col in sample_row.columns:
-            sample_row[col] = value
-    
-    # Apply same preprocessing as training
-    sample_encoded = pd.get_dummies(sample_row, drop_first=True)
-    
-    return sample_encoded
+@st.cache_data
+def get_training_columns():
+    """Get the exact column structure used during training"""
+    try:
+        # Load a sample model to get feature names
+        model_files = [f for f in os.listdir("models") if f.endswith('.pkl')]
+        if model_files:
+            sample_model = joblib.load(f"models/{model_files[0]}")
+            if hasattr(sample_model, 'n_features_in_'):
+                return sample_model.n_features_in_
+        return None
+    except:
+        return None
+
+def prepare_input_features(input_data, original_df, target_col, expected_features=None):
+    """Prepare input features to match training format exactly"""
+    try:
+        # Create a DataFrame with the input data
+        input_df = pd.DataFrame([input_data])
+        
+        # Create a reference DataFrame with all original columns except target
+        reference_df = original_df.drop(target_col, axis=1).iloc[0:1].copy()
+        
+        # Update reference with user inputs
+        for col, value in input_data.items():
+            if col in reference_df.columns:
+                reference_df[col] = value
+        
+        # Apply same preprocessing as training (one-hot encoding)
+        encoded_df = pd.get_dummies(reference_df, drop_first=True)
+        
+        # If we know the expected number of features, ensure we match it
+        if expected_features and encoded_df.shape[1] != expected_features:
+            st.warning(f"⚠️ Feature count mismatch. Model expects {expected_features}, got {encoded_df.shape[1]}")
+            # Try to get all possible columns from the entire dataset
+            full_encoded = pd.get_dummies(original_df.drop(target_col, axis=1), drop_first=True)
+            
+            # Create a row with all possible columns, filled with 0s
+            template = pd.DataFrame(0, index=[0], columns=full_encoded.columns)
+            
+            # Update template with encoded values
+            for col in encoded_df.columns:
+                if col in template.columns:
+                    template[col] = encoded_df[col].values[0]
+            
+            return template
+        
+        return encoded_df
+        
+    except Exception as e:
+        st.error(f"Error in feature preparation: {str(e)}")
+        return None
 
 # 📊 Sidebar Navigation
 st.sidebar.title("🔍 Navigation")
@@ -233,30 +271,46 @@ elif page == "🎯 Make Predictions":
                         unique_values = original_df[col].unique().tolist()
                         input_data[col] = st.selectbox(f"{col}", unique_values)
                     elif original_df[col].dtype in ['int64', 'float64']:
-                        # Numerical feature
+                        # Numerical feature with better UX
                         min_val = float(original_df[col].min())
                         max_val = float(original_df[col].max())
                         mean_val = float(original_df[col].mean())
                         
-                        input_data[col] = st.number_input(
-                            f"{col}", 
-                            min_value=min_val, 
-                            max_value=max_val, 
-                            value=mean_val,
-                            step=(max_val - min_val) / 100
-                        )
+                        # Determine if this should be integer or float
+                        if original_df[col].dtype == 'int64':
+                            # Integer feature - use slider with integer steps
+                            input_data[col] = st.slider(
+                                f"{col}", 
+                                min_value=int(min_val), 
+                                max_value=int(max_val), 
+                                value=int(mean_val),
+                                step=1
+                            )
+                        else:
+                            # Float feature - use slider with reasonable steps
+                            step_size = round((max_val - min_val) / 20, 2)
+                            if step_size == 0:
+                                step_size = 0.01
+                            
+                            input_data[col] = st.slider(
+                                f"{col}", 
+                                min_value=min_val, 
+                                max_value=max_val, 
+                                value=mean_val,
+                                step=step_size,
+                                format="%.2f"
+                            )
             
             # Make Prediction Button
             if st.button("🔮 Make Prediction", type="primary"):
                 try:
-                    # Prepare features
-                    input_features = prepare_input_features(input_data, original_df, target_col)
+                    # Get expected feature count
+                    expected_features = get_training_columns()
                     
-                    # Ensure feature alignment with training data
-                    expected_features = scaler.n_features_in_
-                    if input_features.shape[1] != expected_features:
-                        st.error(f"❌ Feature mismatch. Expected {expected_features}, got {input_features.shape[1]}")
-                    else:
+                    # Prepare features
+                    input_features = prepare_input_features(input_data, original_df, target_col, expected_features)
+                    
+                    if input_features is not None:
                         # Scale features
                         input_scaled = scaler.transform(input_features)
                         
@@ -305,12 +359,15 @@ elif page == "🎯 Make Predictions":
                             st.markdown(f"""
                             <div class="prediction-box">
                                 <h3>🎯 Prediction Result</h3>
-                                <h2>{target_col}: {prediction:.2f}</h2>
+                                <h2>{target_col}: {prediction:,.2f}</h2>
                             </div>
                             """, unsafe_allow_html=True)
+                    else:
+                        st.error("❌ Failed to prepare input features")
                             
                 except Exception as e:
                     st.error(f"❌ Prediction failed: {str(e)}")
+                    st.error("Please check that all features are filled correctly.")
     else:
         st.warning("⚠️ No trained models found. Please run the training script first.")
 

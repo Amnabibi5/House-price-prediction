@@ -10,35 +10,46 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
 
-# 📁 Create folders if not exist
+# 📁 Ensure folders exist
 os.makedirs("models", exist_ok=True)
 os.makedirs("artifacts", exist_ok=True)
 
-# 📥 Load data
+# 📥 Load dataset
 df = pd.read_csv("data/housing.csv")
 
-# 🧹 Preprocessing
-X = df.drop("price", axis=1)
-y = df["price"]
+# 🧠 Define your target column
+target_col = "price"  # 🔁 Change this to match your dataset
 
+# ✅ Validate target column
+if target_col not in df.columns:
+    raise ValueError(f"❌ Target column '{target_col}' not found. Available columns: {df.columns.tolist()}")
 
-# Detect task type
-task_type = "regression" if y.dtype in [np.float64, np.int64] and len(y.unique()) > 10 else "classification"
+# 🧼 Encode categorical features
+df_encoded = pd.get_dummies(df, drop_first=True)
 
-# Encode labels if classification
+# 🔄 Split features and target
+X = df_encoded.drop(target_col, axis=1)
+y = df_encoded[target_col]
+
+# 🧠 Detect task type
+task_type = "regression" if y.dtype in [np.float64, np.int64] and len(np.unique(y)) > 10 else "classification"
+
+# 🔠 Encode target if classification
 if task_type == "classification":
     le = LabelEncoder()
     y = le.fit_transform(y)
     joblib.dump(le, "artifacts/label_encoder.pkl")
 
-# Split and scale
+# 📊 Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# 📏 Scale features
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 joblib.dump(scaler, "artifacts/scaler.pkl")
 
-# 📊 Model definitions
+# 🤖 Define models
 models = {
     "regression": {
         "LinearRegression": LinearRegression()
@@ -57,10 +68,10 @@ for name, model in models[task_type].items():
     model.fit(X_train_scaled, y_train)
     y_pred = model.predict(X_test_scaled)
 
-    # Save model
+    # 💾 Save model
     joblib.dump(model, f"models/{name}.pkl")
 
-    # Evaluate
+    # 📊 Evaluate
     if task_type == "regression":
         rmse = mean_squared_error(y_test, y_pred, squared=False)
         r2 = r2_score(y_test, y_pred)
@@ -73,7 +84,8 @@ for name, model in models[task_type].items():
 metrics_df = pd.DataFrame(metrics)
 metrics_df.to_csv("artifacts/metrics.csv", index=False)
 
-print(f"✅ Training complete. Models saved in /models, metrics in /artifacts.")
+print(f"✅ Training complete.\n📦 Models saved in /models\n📊 Metrics saved in /artifacts")
+
 
 
 

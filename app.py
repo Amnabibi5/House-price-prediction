@@ -91,103 +91,163 @@ def load_artifacts():
     return artifacts
 
 @st.cache_data
-def load_saved_feature_columns():
-    """Load saved feature columns from training if available"""
+def load_training_feature_columns():
+    """Load the exact feature columns used during training"""
     try:
         return joblib.load("artifacts/feature_columns.pkl")
     except FileNotFoundError:
+        st.warning("⚠️ Feature columns file not found. Using fallback method.")
         return None
 
 @st.cache_data
-def get_training_feature_columns(original_df, target_col):
-    """Get the exact feature columns used during training by recreating the preprocessing"""
+def load_training_categorical_mappings():
+    """Load categorical mappings used during training"""
     try:
-        # First try to load saved feature columns
-        saved_columns = load_saved_feature_columns()
-        if saved_columns is not None:
-            return saved_columns
-            
-        # If not available, recreate the exact preprocessing from training
-        df_encoded = pd.get_dummies(original_df, drop_first=True)
-        feature_columns = df_encoded.drop(target_col, axis=1).columns.tolist()
-        return feature_columns
-    except Exception as e:
-        st.error(f"Error getting training columns: {str(e)}")
+        return joblib.load("artifacts/categorical_mappings.pkl")
+    except FileNotFoundError:
+        st.warning("⚠️ Categorical mappings not found. Using original data.")
         return None
 
-def create_exact_feature_match(input_data, scaler_expected_features=12):
-    """Create features that exactly match what the model expects"""
+def prepare_input_features_exact_match(input_data, original_df, target_col):
+    """
+    Prepare input features with exact alignment to training features
+    This is the most robust method that ensures exact feature matching
+    """
     try:
-        # Create input DataFrame
+        # Load saved training columns and categorical mappings
+        training_columns = load_training_feature_columns()
+        categorical_mappings = load_training_categorical_mappings()
+        scaler = artifacts['scaler']
+        
+        if training_columns is None:
+            # Fallback: Recreate from original data
+            st.warning("Using fallback method - recreating training columns")
+            return prepare_input_features_fallback(input_data, original_df, target_col)
+        
+        # Create a DataFrame with the input data
         input_df = pd.DataFrame([input_data])
         
-        # Apply one-hot encoding
-        encoded_df = pd.get_dummies(input_df, drop_first=True)
+        # Method 1: Use saved categorical mappings if available
+        if categorical_mappings is not None:
+            st.success("✅ Using saved categorical mappings")
+            
+            # Apply the exact same encoding as during training
+            encoded_df = pd.DataFrame(index=[0])
+            
+            for col in original_df.columns:
+                if col == target_col:
+                    continue
+                    
+                if col in categorical_mappings:
+                    # This was a categorical column during training
+                    input_value = input_data.get(col, None)
+                    
+                    # Get all possible encoded columns for this categorical feature
+                    possible_columns = [c for c in training_columns if c.startswith(f"{col}_")]
+                    
+                    # Initialize all categorical columns to 0
+                    for encoded_col in possible_columns:
+                        encoded_df[encoded_col] = 0
+                    
+                    # Set the appropriate column to 1 if the value exists
+                    if input_value is not None:
+                        encoded_col_name = f"{col}_{input_value}"
+                        if encoded_col_name in training_columns:
+                            encoded_df[encoded_col_name] = 1
+                        # If value doesn't exist in training, leave all as 0 (unknown category)
+                    
+                else:
+                    # This was a numerical column
+                    if col in training_columns:
+                        encoded_df[col] = input_data.get(col, 0)
+            
+            # Ensure we have all training columns in the correct order
+            final_df = pd.DataFrame(0, index=[0], columns=training_columns)
+            for col in encoded_df.columns:
+                if col in final_df.columns:
+                    final_df[col] = encoded_df[col]
+            
+            return final_df
         
-        # Get current feature count
-        current_features = encoded_df.shape[1]
-        
-        if current_features == scaler_expected_features:
-            return encoded_df
-        elif current_features > scaler_expected_features:
-            # Too many features - truncate
-            return encoded_df.iloc[:, :scaler_expected_features]
+        # Method 2: Standard one-hot encoding with strict alignment
         else:
-            # Too few features - pad with zeros
-            missing_features = scaler_expected_features - current_features
-            padding = pd.DataFrame(0, index=[0], columns=[f"missing_feature_{i}" for i in range(missing_features)])
-            return pd.concat([encoded_df, padding], axis=1)
+            st.info("🔄 Using standard encoding with strict alignment")
             
-    except Exception as e:
-        st.error(f"Error in exact feature matching: {str(e)}")
-        return None
-
-def prepare_input_features_robust(input_data, original_df, target_col):
-    """Most robust feature preparation method"""
-    try:
-        scaler = artifacts['scaler']
-        expected_feature_count = scaler.n_features_in_
-        
-        # Method 1: Try the exact feature match
-        exact_features = create_exact_feature_match(input_data, expected_feature_count)
-        
-        if exact_features is not None and exact_features.shape[1] == expected_feature_count:
-            st.success(f"✅ Exact feature match: {exact_features.shape[1]} columns")
-            return exact_features
-        
-        # Method 2: Fallback to the previous method but with strict truncation
-        expected_columns = get_training_feature_columns(original_df, target_col)
-        if expected_columns is not None:
-            # Force truncate to expected count
-            expected_columns = expected_columns[:expected_feature_count]
+            # Apply one-hot encoding
+            input_encoded = pd.get_dummies(input_df, drop_first=True)
             
-            input_row = pd.DataFrame([input_data])
-            input_encoded = pd.get_dummies(input_row, drop_first=True)
+            # Create a DataFrame with training columns initialized to 0
+            aligned_features = pd.DataFrame(0, index=[0], columns=training_columns)
             
-            # Create template with exact number of features
-            aligned_features = pd.DataFrame(0, index=[0], columns=expected_columns)
-            
+            # Fill in the values for columns that exist in input
             for col in input_encoded.columns:
                 if col in aligned_features.columns:
                     aligned_features[col] = input_encoded[col].iloc[0]
             
-            st.success(f"✅ Aligned features: {aligned_features.shape[1]} columns")
             return aligned_features
+            
+    except Exception as e:
+        st.error(f"❌ Exact match method failed: {str(e)}")
+        return prepare_input_features_fallback(input_data, original_df, target_col)
+
+def prepare_input_features_fallback(input_data, original_df, target_col):
+    """
+    Fallback method when saved artifacts are not available
+    """
+    try:
+        scaler = artifacts['scaler']
+        expected_feature_count = scaler.n_features_in_
         
-        # Method 3: Last resort - create exactly what's needed
-        st.warning("Using last resort method")
-        dummy_features = pd.DataFrame(0, index=[0], columns=[f"feature_{i}" for i in range(expected_feature_count)])
+        st.info("🔄 Using fallback feature preparation method")
         
-        # Fill in numerical features from input
-        numerical_cols = original_df.select_dtypes(include=[np.number]).columns
-        for i, col in enumerate(numerical_cols):
-            if col in input_data and col != target_col and i < expected_feature_count:
-                dummy_features.iloc[0, i] = input_data[col]
+        # Create input DataFrame
+        input_df = pd.DataFrame([input_data])
         
-        return dummy_features
+        # Get numerical and categorical columns from original data
+        numerical_cols = original_df.select_dtypes(include=[np.number]).columns.tolist()
+        categorical_cols = original_df.select_dtypes(include=['object', 'category']).columns.tolist()
+        
+        # Remove target column
+        if target_col in numerical_cols:
+            numerical_cols.remove(target_col)
+        if target_col in categorical_cols:
+            categorical_cols.remove(target_col)
+        
+        # Recreate the same encoding as training
+        # First, get the training data encoding structure
+        training_sample = original_df.drop(target_col, axis=1).head(1)
+        training_encoded = pd.get_dummies(training_sample, drop_first=True)
+        training_columns = training_encoded.columns.tolist()
+        
+        # Ensure we don't exceed the expected feature count
+        if len(training_columns) > expected_feature_count:
+            training_columns = training_columns[:expected_feature_count]
+        
+        # Apply same encoding to input
+        input_encoded = pd.get_dummies(input_df, drop_first=True)
+        
+        # Align with training columns
+        aligned_features = pd.DataFrame(0, index=[0], columns=training_columns)
+        
+        for col in input_encoded.columns:
+            if col in aligned_features.columns:
+                aligned_features[col] = input_encoded[col].iloc[0]
+        
+        # If we still don't have enough features, pad with zeros
+        if aligned_features.shape[1] < expected_feature_count:
+            missing_count = expected_feature_count - aligned_features.shape[1]
+            padding_cols = [f"missing_feature_{i}" for i in range(missing_count)]
+            padding_df = pd.DataFrame(0, index=[0], columns=padding_cols)
+            aligned_features = pd.concat([aligned_features, padding_df], axis=1)
+        
+        # If we have too many features, truncate
+        elif aligned_features.shape[1] > expected_feature_count:
+            aligned_features = aligned_features.iloc[:, :expected_feature_count]
+        
+        return aligned_features
         
     except Exception as e:
-        st.error(f"❌ All feature preparation methods failed: {str(e)}")
+        st.error(f"❌ Fallback method failed: {str(e)}")
         return None
 
 def get_available_models():
@@ -204,6 +264,20 @@ def load_model(model_name):
     except FileNotFoundError:
         st.error(f"❌ Model {model_name} not found.")
         return None
+
+def validate_input_features(features_df, expected_count, model_name):
+    """Validate that features match model expectations"""
+    actual_count = features_df.shape[1]
+    
+    if actual_count == expected_count:
+        st.success(f"✅ Perfect feature match for {model_name}: {actual_count} features")
+        return True
+    elif actual_count < expected_count:
+        st.warning(f"⚠️ Feature count mismatch for {model_name}: Got {actual_count}, expected {expected_count}")
+        return False
+    else:
+        st.error(f"❌ Too many features for {model_name}: Got {actual_count}, expected {expected_count}")
+        return False
 
 # 📊 Sidebar Navigation
 st.sidebar.title("🔍 Navigation")
@@ -307,17 +381,21 @@ elif page == "🎯 Make Predictions":
         scaler = artifacts['scaler']
         
         if model and scaler:
-            # Feature columns info
-            expected_columns = get_training_feature_columns(original_df, target_col)
-            
             # Show model info
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Selected Model", selected_model)
             with col2:
-                st.metric("Expected Features", len(expected_columns) if expected_columns else "Unknown")
+                st.metric("Expected Features", scaler.n_features_in_)
             with col3:
-                st.metric("Scaler Features", artifacts['scaler'].n_features_in_)
+                training_cols = load_training_feature_columns()
+                st.metric("Training Columns", len(training_cols) if training_cols else "Unknown")
+            
+            # Feature alignment status
+            if training_cols:
+                st.success("✅ Training feature columns available - exact alignment possible")
+            else:
+                st.warning("⚠️ Training feature columns not found - using fallback method")
             
             st.subheader("📝 Input Features")
             
@@ -333,17 +411,15 @@ elif page == "🎯 Make Predictions":
                 with cols[idx % num_cols]:
                     if original_df[col].dtype in ['object', 'category']:
                         # Categorical feature
-                        unique_values = original_df[col].unique().tolist()
+                        unique_values = sorted(original_df[col].unique().tolist())
                         input_data[col] = st.selectbox(f"📋 {col}", unique_values, key=f"select_{col}")
                     elif original_df[col].dtype in ['int64', 'float64']:
-                        # Numerical feature with better UX
+                        # Numerical feature
                         min_val = float(original_df[col].min())
                         max_val = float(original_df[col].max())
                         mean_val = float(original_df[col].mean())
                         
-                        # Determine if this should be integer or float
                         if original_df[col].dtype == 'int64':
-                            # Integer feature - use slider with integer steps
                             input_data[col] = st.slider(
                                 f"🔢 {col}", 
                                 min_value=int(min_val), 
@@ -353,10 +429,9 @@ elif page == "🎯 Make Predictions":
                                 key=f"slider_int_{col}"
                             )
                         else:
-                            # Float feature - use slider with reasonable steps
-                            step_size = round((max_val - min_val) / 20, 2)
+                            step_size = round((max_val - min_val) / 100, 3)
                             if step_size == 0:
-                                step_size = 0.01
+                                step_size = 0.001
                             
                             input_data[col] = st.slider(
                                 f"📊 {col}", 
@@ -364,95 +439,118 @@ elif page == "🎯 Make Predictions":
                                 max_value=max_val, 
                                 value=mean_val,
                                 step=step_size,
-                                format="%.2f",
+                                format="%.3f",
                                 key=f"slider_float_{col}"
                             )
             
+            # Show feature preview
+            with st.expander("👀 Input Data Preview"):
+                preview_df = pd.DataFrame([input_data])
+                st.dataframe(preview_df, use_container_width=True)
+            
             # Make Prediction Button
             if st.button("🔮 Make Prediction", type="primary"):
-                try:
-                    # Debug: Show input data
-                    with st.expander("🔍 Debug Info"):
-                        st.write("**Input Data:**", input_data)
-                        st.write("**Input Data Types:**", {k: type(v).__name__ for k, v in input_data.items()})
-                    
-                    # Prepare features with robust alignment
-                    input_features = prepare_input_features_robust(input_data, original_df, target_col)
-                    
-                    if input_features is not None:
-                        # Verify feature count matches scaler expectations
-                        expected_features = scaler.n_features_in_
-                        actual_features = input_features.shape[1]
+                with st.spinner("Preparing features and making prediction..."):
+                    try:
+                        # Prepare features with exact matching
+                        input_features = prepare_input_features_exact_match(input_data, original_df, target_col)
                         
-                        st.info(f"🔍 Feature Check: Expected {expected_features}, Got {actual_features}")
-                        
-                        if actual_features == expected_features:
-                            # Perfect match - proceed with prediction
-                            input_scaled = scaler.transform(input_features)
-                            prediction = model.predict(input_scaled)[0]
+                        if input_features is not None:
+                            # Validate features
+                            expected_features = scaler.n_features_in_
+                            is_valid = validate_input_features(input_features, expected_features, selected_model)
                             
-                            # Handle classification vs regression
-                            if task_type == "classification":
-                                if artifacts['label_encoder']:
-                                    prediction_label = artifacts['label_encoder'].inverse_transform([prediction])[0]
-                                    
-                                    # Get prediction probabilities if available
-                                    if hasattr(model, 'predict_proba'):
-                                        probabilities = model.predict_proba(input_scaled)[0]
-                                        classes = artifacts['label_encoder'].classes_
-                                        
-                                        st.markdown(f"""
-                                        <div class="prediction-box">
-                                            <h3>🎯 Prediction Result</h3>
-                                            <h2>Class: {prediction_label}</h2>
-                                            <p>Confidence: {max(probabilities):.2%}</p>
-                                        </div>
-                                        """, unsafe_allow_html=True)
-                                        
-                                        # Show probability distribution
-                                        prob_df = pd.DataFrame({
-                                            'Class': classes,
-                                            'Probability': probabilities
-                                        })
-                                        
-                                        fig_prob = px.bar(
-                                            prob_df, 
-                                            x='Class', 
-                                            y='Probability',
-                                            title="Prediction Probabilities",
-                                            color='Probability',
-                                            color_continuous_scale='Blues'
-                                        )
-                                        st.plotly_chart(fig_prob, use_container_width=True)
-                                    else:
-                                        st.markdown(f"""
-                                        <div class="prediction-box">
-                                            <h3>🎯 Prediction Result</h3>
-                                            <h2>Class: {prediction_label}</h2>
-                                        </div>
-                                        """, unsafe_allow_html=True)
-                            else:  # Regression
-                                st.markdown(f"""
-                                <div class="prediction-box">
-                                    <h3>🎯 Prediction Result</h3>
-                                    <h2>{target_col}: ${prediction:,.2f}</h2>
-                                </div>
-                                """, unsafe_allow_html=True)
+                            if is_valid:
+                                # Scale features
+                                input_scaled = scaler.transform(input_features)
                                 
-                                # Show prediction confidence interval (optional)
-                                st.info(f"💡 Predicted {target_col}: ${prediction:,.2f}")
-                    else:
-                        st.error("❌ Failed to prepare input features")
+                                # Make prediction
+                                prediction = model.predict(input_scaled)[0]
+                                
+                                # Display results based on task type
+                                if task_type == "classification":
+                                    if artifacts['label_encoder']:
+                                        prediction_label = artifacts['label_encoder'].inverse_transform([prediction])[0]
+                                        
+                                        # Get prediction probabilities if available
+                                        if hasattr(model, 'predict_proba'):
+                                            probabilities = model.predict_proba(input_scaled)[0]
+                                            classes = artifacts['label_encoder'].classes_
+                                            max_prob = max(probabilities)
+                                            
+                                            st.markdown(f"""
+                                            <div class="prediction-box">
+                                                <h3>🎯 Prediction Result</h3>
+                                                <h2>Class: {prediction_label}</h2>
+                                                <p>Confidence: {max_prob:.2%}</p>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                            
+                                            # Show probability distribution
+                                            prob_df = pd.DataFrame({
+                                                'Class': classes,
+                                                'Probability': probabilities
+                                            }).sort_values('Probability', ascending=False)
+                                            
+                                            fig_prob = px.bar(
+                                                prob_df, 
+                                                x='Class', 
+                                                y='Probability',
+                                                title="Class Probabilities",
+                                                color='Probability',
+                                                color_continuous_scale='Blues'
+                                            )
+                                            fig_prob.update_layout(showlegend=False)
+                                            st.plotly_chart(fig_prob, use_container_width=True)
+                                        else:
+                                            st.markdown(f"""
+                                            <div class="prediction-box">
+                                                <h3>🎯 Prediction Result</h3>
+                                                <h2>Class: {prediction_label}</h2>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                else:  # Regression
+                                    st.markdown(f"""
+                                    <div class="prediction-box">
+                                        <h3>🎯 Prediction Result</h3>
+                                        <h2>{target_col}: ${prediction:,.2f}</h2>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                # Show feature importance (if available)
+                                if hasattr(model, 'feature_importances_'):
+                                    with st.expander("📊 Feature Importance"):
+                                        importances = model.feature_importances_
+                                        feature_names = load_training_feature_columns()
+                                        if feature_names and len(feature_names) == len(importances):
+                                            importance_df = pd.DataFrame({
+                                                'Feature': feature_names,
+                                                'Importance': importances
+                                            }).sort_values('Importance', ascending=False).head(10)
+                                            
+                                            fig_imp = px.bar(
+                                                importance_df,
+                                                x='Importance',
+                                                y='Feature',
+                                                orientation='h',
+                                                title="Top 10 Feature Importances"
+                                            )
+                                            fig_imp.update_layout(height=400)
+                                            st.plotly_chart(fig_imp, use_container_width=True)
+                            else:
+                                st.error("❌ Feature validation failed. Please check the training setup.")
+                        else:
+                            st.error("❌ Failed to prepare input features for prediction.")
                             
-                except Exception as e:
-                    st.error(f"❌ Prediction failed: {str(e)}")
-                    st.error("Please check that all features are filled correctly.")
-                    # Show more detailed error info
-                    with st.expander("🔧 Error Details"):
-                        st.code(f"Error Type: {type(e).__name__}")
-                        st.code(f"Error Message: {str(e)}")
-                        import traceback
-                        st.code(traceback.format_exc())
+                    except Exception as e:
+                        st.error(f"❌ Prediction failed: {str(e)}")
+                        with st.expander("🔍 Debug Information"):
+                            st.code(f"Error Type: {type(e).__name__}")
+                            st.code(f"Error Message: {str(e)}")
+                            st.code(f"Input Data: {input_data}")
+                            if 'input_features' in locals():
+                                st.code(f"Feature Shape: {input_features.shape if input_features is not None else 'None'}")
+                            
     else:
         st.warning("⚠️ No trained models found. Please run the training script first.")
 
@@ -495,11 +593,37 @@ elif page == "📈 Data Insights":
         )
         st.plotly_chart(fig_dist, use_container_width=True)
     
-    # Feature Correlation (for numerical features)
+    # Feature Analysis
+    st.subheader("🔍 Feature Analysis")
+    
+    # Numerical features analysis
     numerical_cols = original_df.select_dtypes(include=[np.number]).columns.tolist()
+    if target_col in numerical_cols:
+        numerical_cols.remove(target_col)
+    
+    categorical_cols = original_df.select_dtypes(include=['object', 'category']).columns.tolist()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write(f"**Numerical Features ({len(numerical_cols)})**")
+        if numerical_cols:
+            for col in numerical_cols:
+                unique_count = original_df[col].nunique()
+                st.write(f"- {col}: {unique_count} unique values")
+    
+    with col2:
+        st.write(f"**Categorical Features ({len(categorical_cols)})**")
+        if categorical_cols:
+            for col in categorical_cols:
+                unique_count = original_df[col].nunique()
+                st.write(f"- {col}: {unique_count} categories")
+    
+    # Feature Correlation (for numerical features only)
     if len(numerical_cols) > 1:
-        st.subheader("🔗 Feature Correlations")
-        corr_matrix = original_df[numerical_cols].corr()
+        st.subheader("🔗 Numerical Feature Correlations")
+        corr_cols = numerical_cols + [target_col] if target_col in original_df.select_dtypes(include=[np.number]).columns else numerical_cols
+        corr_matrix = original_df[corr_cols].corr()
         
         fig_corr = px.imshow(
             corr_matrix,
@@ -564,6 +688,23 @@ elif page == "🔧 System Diagnostics":
         </div>
         """, unsafe_allow_html=True)
     
+    # Feature Engineering Diagnostics
+    st.subheader("🔧 Feature Engineering Diagnostics")
+    
+    # Check for critical files
+    critical_files = [
+        ("feature_columns.pkl", "Training feature columns"),
+        ("categorical_mappings.pkl", "Categorical mappings"),
+        ("scaler.pkl", "Feature scaler")
+    ]
+    
+    for filename, description in critical_files:
+        filepath = f"artifacts/{filename}"
+        if os.path.exists(filepath):
+            st.success(f"✅ {description}: Available")
+        else:
+            st.warning(f"⚠️ {description}: Not found (using fallback methods)")
+    
     # Model Information
     st.subheader("🤖 Model Information")
     if available_models:
@@ -575,97 +716,30 @@ elif page == "🔧 System Diagnostics":
                     if hasattr(model, 'n_features_in_'):
                         st.write(f"**Expected Features:** {model.n_features_in_}")
                     if hasattr(model, 'classes_'):
-                        st.write(f"**Classes:** {model.classes_}")
+                        st.write(f"**Classes:** {list(model.classes_)}")
+                    if hasattr(model, 'feature_importances_'):
+                        st.write(f"**Feature Importances:** Available")
                     
-                    # Model parameters
-                    st.write("**Model Parameters:**")
+                    # Model parameters (top 5)
+                    st.write("**Key Parameters:**")
                     params = model.get_params()
                     for key, value in list(params.items())[:5]:
                         st.write(f"- {key}: {value}")
                     if len(params) > 5:
                         st.write(f"... and {len(params) - 5} more parameters")
     
-    # Feature Engineering Info
-    st.subheader("🔧 Feature Engineering")
+    # Feature Alignment Test
+    st.subheader("🎯 Feature Alignment Test")
     
-    if artifacts:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Scaler Information:**")
-            st.write(f"- Type: {type(artifacts['scaler']).__name__}")
-            st.write(f"- Features: {artifacts['scaler'].n_features_in_}")
-            st.write(f"- Feature Names: {'Available' if hasattr(artifacts['scaler'], 'feature_names_in_') else 'Not Available'}")
-        
-        with col2:
-            if artifacts['label_encoder']:
-                st.write("**Label Encoder Information:**")
-                st.write(f"- Classes: {len(artifacts['label_encoder'].classes_)}")
-                st.write(f"- Class Names: {list(artifacts['label_encoder'].classes_)}")
-            else:
-                st.write("**Label Encoder:** Not used (Regression task)")
-    
-    # Feature Columns Analysis
-    expected_columns = get_training_feature_columns(original_df, target_col)
-    if expected_columns:
-        st.subheader("📋 Feature Columns Analysis")
-        st.write(f"**Total Features After Encoding:** {len(expected_columns)}")
-        
-        # Categorize columns
-        categorical_cols = [col for col in expected_columns if any(orig_col in col for orig_col in original_df.select_dtypes(include=['object', 'category']).columns)]
-        numerical_cols = [col for col in expected_columns if col not in categorical_cols]
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write(f"**Numerical Features:** {len(numerical_cols)}")
-            if numerical_cols:
-                st.write(numerical_cols[:10])
-                if len(numerical_cols) > 10:
-                    st.write(f"... and {len(numerical_cols) - 10} more")
-        
-        with col2:
-            st.write(f"**Categorical Features:** {len(categorical_cols)}")
-            if categorical_cols:
-                st.write(categorical_cols[:10])
-                if len(categorical_cols) > 10:
-                    st.write(f"... and {len(categorical_cols) - 10} more")
-
-# 🔄 Sidebar Information
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📝 Instructions")
-st.sidebar.markdown("""
-1. **📊 Model Performance**: View and compare model metrics
-2. **🎯 Make Predictions**: Input features and get predictions  
-3. **📈 Data Insights**: Explore dataset characteristics
-4. **🔧 System Diagnostics**: Check system status and debug issues
-""")
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### ℹ️ System Info")
-if metrics_df is not None:
-    st.sidebar.markdown(f"**Models Trained**: {len(available_models)}")
-    st.sidebar.markdown(f"**Task Type**: {task_type.title()}")
-    st.sidebar.markdown(f"**Dataset Size**: {len(original_df)} samples")
-
-# System Status
-st.sidebar.markdown("### 🚦 System Status")
-status_items = [
-    ("Data", "✅" if original_df is not None else "❌"),
-    ("Models", "✅" if available_models else "❌"),  
-    ("Artifacts", "✅" if artifacts else "❌"),
-    ("Metrics", "✅" if metrics_df is not None else "❌")
-]
-
-for item, status in status_items:
-    st.sidebar.markdown(f"{status} {item}")
-
-# Footer
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #666;'>"
-    "🤖 ML Model Comparison Dashboard | Built with Streamlit | "
-    f"Task: {task_type.title()} | Models: {len(available_models)}"
-    "</div>", 
-    unsafe_allow_html=True
-)
+    if st.button("🧪 Test Feature Alignment"):
+        try:
+            # Create a sample input using the first row of original data
+            sample_input = {}
+            for col in original_df.columns:
+                if col != target_col:
+                    sample_input[col] = original_df[col].iloc[0]
+            
+            st.write("**Sample Input:**", sample_input)
+            
+            # Test feature preparation
+            test

@@ -95,9 +95,12 @@ if st.button("🔍 Compare Predictions"):
         "airconditioning": "int64",
         "prefarea": "int64",
         "mainroad": "int64",
-        "location": "int64",
-        "furnishingstatus": "object"
+        "location": "int64"
     })
+
+    # Ensure categorical columns are strings
+    for col in ["furnishingstatus"]:
+        input_df[col] = input_df[col].astype(str)
 
     # Predict with all models
     predictions = {}
@@ -131,6 +134,8 @@ if st.button("🔍 Compare Predictions"):
     st.subheader("📐 Model Performance Metrics")
     metrics_df = pd.DataFrame(model_metrics).T
     st.dataframe(metrics_df.style.format({"RMSE": "{:,.0f}", "R²": "{:.2f}"}))
+
+
 
 
 

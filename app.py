@@ -59,6 +59,7 @@ def get_user_input():
 
     return pd.DataFrame([input_dict])
 
+# 🧼 Preprocessing
 def preprocess_input(df):
     binary_map = {"Yes": 1, "No": 0}
     for col in ["guestroom", "basement", "hotwaterheating", "airconditioning", "prefarea", "mainroad"]:
@@ -76,18 +77,10 @@ def preprocess_input(df):
 
     # Ensure column order and types match
     df_encoded = df_encoded.astype(float)
-st.write("🧪 Input columns:", df_encoded.columns.tolist())
-st.write("🧪 Expected columns:", feature_cols)
 
-    df_scaled = scaler.transform(df_encoded)
-    return df_scaled, df_encoded
-
-    # Align with training columns
-    if feature_cols:
-        for col in feature_cols:
-            if col not in df_encoded.columns:
-                df_encoded[col] = 0
-        df_encoded = df_encoded[feature_cols]
+    # Optional debug info
+    st.write("🧪 Input columns:", df_encoded.columns.tolist())
+    st.write("🧪 Expected columns:", feature_cols)
 
     df_scaled = scaler.transform(df_encoded)
     return df_scaled, df_encoded
@@ -159,5 +152,3 @@ with tab2:
     input_scaled, input_encoded = preprocess_input(input_df)
     if st.button("🔍 Predict Category"):
         predict_and_display(classification_models, input_scaled, input_encoded, task="classification")
-
-

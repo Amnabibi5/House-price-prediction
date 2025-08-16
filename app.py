@@ -1,4 +1,5 @@
-import streamlit as st
+# Make Prediction Button
+            st.subheader("🔮 Make Prediction")import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
@@ -115,79 +116,52 @@ def get_training_feature_columns(original_df, target_col):
         st.error(f"Error getting training columns: {str(e)}")
         return None
 
-def create_exact_feature_match(input_data, scaler_expected_features=12):
-    """Create features that exactly match what the model expects"""
+def prepare_input_simple(input_data):
+    """Simple, bulletproof feature preparation that always returns 12 features"""
     try:
+        # Get the exact number expected by the scaler
+        scaler = artifacts['scaler']
+        expected_features = scaler.n_features_in_  # Should be 12
+        
         # Create input DataFrame
         input_df = pd.DataFrame([input_data])
         
         # Apply one-hot encoding
         encoded_df = pd.get_dummies(input_df, drop_first=True)
         
-        # Get current feature count
+        # Get current features
         current_features = encoded_df.shape[1]
         
-        if current_features == scaler_expected_features:
-            return encoded_df
-        elif current_features > scaler_expected_features:
-            # Too many features - truncate
-            return encoded_df.iloc[:, :scaler_expected_features]
+        st.info(f"🔍 Before adjustment: {current_features} features")
+        st.info(f"🎯 Target: {expected_features} features")
+        
+        if current_features == expected_features:
+            # Perfect match
+            result = encoded_df
+        elif current_features > expected_features:
+            # Too many features - take only the first N
+            result = encoded_df.iloc[:, :expected_features]
+            st.warning(f"⚠️ Truncated from {current_features} to {expected_features} features")
         else:
             # Too few features - pad with zeros
-            missing_features = scaler_expected_features - current_features
-            padding = pd.DataFrame(0, index=[0], columns=[f"missing_feature_{i}" for i in range(missing_features)])
-            return pd.concat([encoded_df, padding], axis=1)
+            missing_count = expected_features - current_features
+            # Create padding columns
+            padding = pd.DataFrame(0, index=[0], columns=[f"pad_{i}" for i in range(missing_count)])
+            result = pd.concat([encoded_df, padding], axis=1)
+            st.warning(f"⚠️ Padded from {current_features} to {expected_features} features")
+        
+        # Double-check final shape
+        final_features = result.shape[1]
+        st.success(f"✅ Final features: {final_features}")
+        
+        if final_features != expected_features:
+            st.error(f"❌ Still mismatch! Expected: {expected_features}, Got: {final_features}")
+            return None
             
-    except Exception as e:
-        st.error(f"Error in exact feature matching: {str(e)}")
-        return None
-
-def prepare_input_features_robust(input_data, original_df, target_col):
-    """Most robust feature preparation method"""
-    try:
-        scaler = artifacts['scaler']
-        expected_feature_count = scaler.n_features_in_
-        
-        # Method 1: Try the exact feature match
-        exact_features = create_exact_feature_match(input_data, expected_feature_count)
-        
-        if exact_features is not None and exact_features.shape[1] == expected_feature_count:
-            st.success(f"✅ Exact feature match: {exact_features.shape[1]} columns")
-            return exact_features
-        
-        # Method 2: Fallback to the previous method but with strict truncation
-        expected_columns = get_training_feature_columns(original_df, target_col)
-        if expected_columns is not None:
-            # Force truncate to expected count
-            expected_columns = expected_columns[:expected_feature_count]
-            
-            input_row = pd.DataFrame([input_data])
-            input_encoded = pd.get_dummies(input_row, drop_first=True)
-            
-            # Create template with exact number of features
-            aligned_features = pd.DataFrame(0, index=[0], columns=expected_columns)
-            
-            for col in input_encoded.columns:
-                if col in aligned_features.columns:
-                    aligned_features[col] = input_encoded[col].iloc[0]
-            
-            st.success(f"✅ Aligned features: {aligned_features.shape[1]} columns")
-            return aligned_features
-        
-        # Method 3: Last resort - create exactly what's needed
-        st.warning("Using last resort method")
-        dummy_features = pd.DataFrame(0, index=[0], columns=[f"feature_{i}" for i in range(expected_feature_count)])
-        
-        # Fill in numerical features from input
-        numerical_cols = original_df.select_dtypes(include=[np.number]).columns
-        for i, col in enumerate(numerical_cols):
-            if col in input_data and col != target_col and i < expected_feature_count:
-                dummy_features.iloc[0, i] = input_data[col]
-        
-        return dummy_features
+        return result
         
     except Exception as e:
-        st.error(f"❌ All feature preparation methods failed: {str(e)}")
+        st.error(f"❌ Error in simple preparation: {str(e)}")
         return None
 
 def get_available_models():
@@ -368,26 +342,57 @@ elif page == "🎯 Make Predictions":
                                 key=f"slider_float_{col}"
                             )
             
-            # Make Prediction Button
+            # Show current input summary
+            st.subheader("📊 Current Input Summary")
+            col1, col2 = st.columns(2)
+            with col1:
+                numerical_inputs = {k: v for k, v in input_data.items() if isinstance(v, (int, float))}
+                st.write("**Numerical Features:**")
+                for k, v in numerical_inputs.items():
+                    st.write(f"- {k}: {v}")
+                    
+            with col2:
+                categorical_inputs = {k: v for k, v in input_data.items() if isinstance(v, str)}
+                st.write("**Categorical Features:**")
+                for k, v in categorical_inputs.items():
+                    st.write(f"- {k}: {v}")
+            
+            # Show what encoding will produce
+            st.subheader("🔍 Feature Encoding Preview")
+            preview_df = pd.DataFrame([input_data])
+            preview_encoded = pd.get_dummies(preview_df, drop_first=True)
+            st.write(f"**Features after encoding:** {preview_encoded.shape[1]}")
+            st.write(f"**Expected by model:** {scaler.n_features_in_}")
+            
+            if preview_encoded.shape[1] != scaler.n_features_in_:
+                if preview_encoded.shape[1] > scaler.n_features_in_:
+                    st.warning(f"⚠️ Will truncate {preview_encoded.shape[1] - scaler.n_features_in_} excess features")
+                else:
+                    st.info(f"ℹ️ Will pad {scaler.n_features_in_ - preview_encoded.shape[1]} missing features with zeros")
+            else:
+                st.success("✅ Perfect feature count match!")
+                
+            # Show encoded column names
+            with st.expander("🔧 See Encoded Column Names"):
+                st.write("**Encoded columns:**", preview_encoded.columns.tolist())
             if st.button("🔮 Make Prediction", type="primary"):
                 try:
                     # Debug: Show input data
                     with st.expander("🔍 Debug Info"):
                         st.write("**Input Data:**", input_data)
                         st.write("**Input Data Types:**", {k: type(v).__name__ for k, v in input_data.items()})
+                        st.write("**Expected Features:**", scaler.n_features_in_)
                     
-                    # Prepare features with robust alignment
-                    input_features = prepare_input_features_robust(input_data, original_df, target_col)
+                    # Use simple preparation method
+                    input_features = prepare_input_simple(input_data)
                     
                     if input_features is not None:
-                        # Verify feature count matches scaler expectations
+                        # Final verification
                         expected_features = scaler.n_features_in_
                         actual_features = input_features.shape[1]
                         
-                        st.info(f"🔍 Feature Check: Expected {expected_features}, Got {actual_features}")
-                        
                         if actual_features == expected_features:
-                            # Perfect match - proceed with prediction
+                            # Scale features and make prediction
                             input_scaled = scaler.transform(input_features)
                             prediction = model.predict(input_scaled)[0]
                             

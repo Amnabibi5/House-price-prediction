@@ -38,20 +38,20 @@ st.title("🏠 House Price Prediction Dashboard")
 tab1, tab2 = st.tabs(["📈 Regression Models", "🧠 Classification Models"])
 
 # 📋 Input form
-def get_user_input():
+def get_user_input(prefix=""):
     st.subheader("📋 Enter House Details")
-    area = st.number_input("📐 Area (sq ft)", min_value=500, max_value=10000, step=50)
-    bedrooms = st.selectbox("🛏 Bedrooms", [1, 2, 3, 4, 5])
-    bathrooms = st.selectbox("🛁 Bathrooms", [1, 2, 3, 4])
-    stories = st.selectbox("🏢 Stories", [1, 2, 3])
-    parking = st.selectbox("🚗 Parking Spaces", [0, 1, 2, 3])
-    guestroom = st.selectbox("🛋 Guest Room", ["Yes", "No"])
-    basement = st.selectbox("🏚 Basement", ["Yes", "No"])
-    hotwaterheating = st.selectbox("🔥 Hot Water Heating", ["Yes", "No"])
-    airconditioning = st.selectbox("❄️ Air Conditioning", ["Yes", "No"])
-    prefarea = st.selectbox("🌟 Preferred Area", ["Yes", "No"])
-    furnishingstatus = st.selectbox("🪑 Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"])
-    mainroad = st.selectbox("🛣 Main Road Access", ["Yes", "No"])
+    area = st.number_input("📐 Area (sq ft)", min_value=500, max_value=10000, step=50, key=f"{prefix}_area")
+    bedrooms = st.selectbox("🛏 Bedrooms", [1, 2, 3, 4, 5], key=f"{prefix}_bedrooms")
+    bathrooms = st.selectbox("🛁 Bathrooms", [1, 2, 3, 4], key=f"{prefix}_bathrooms")
+    stories = st.selectbox("🏢 Stories", [1, 2, 3], key=f"{prefix}_stories")
+    parking = st.selectbox("🚗 Parking Spaces", [0, 1, 2, 3], key=f"{prefix}_parking")
+    guestroom = st.selectbox("🛋 Guest Room", ["Yes", "No"], key=f"{prefix}_guestroom")
+    basement = st.selectbox("🏚 Basement", ["Yes", "No"], key=f"{prefix}_basement")
+    hotwaterheating = st.selectbox("🔥 Hot Water Heating", ["Yes", "No"], key=f"{prefix}_hotwaterheating")
+    airconditioning = st.selectbox("❄️ Air Conditioning", ["Yes", "No"], key=f"{prefix}_airconditioning")
+    prefarea = st.selectbox("🌟 Preferred Area", ["Yes", "No"], key=f"{prefix}_prefarea")
+    furnishingstatus = st.selectbox("🪑 Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"], key=f"{prefix}_furnishingstatus")
+    mainroad = st.selectbox("🛣 Main Road Access", ["Yes", "No"], key=f"{prefix}_mainroad")
 
     input_dict = {
         "area": area,
@@ -174,17 +174,15 @@ def predict_and_display(models, input_scaled, input_encoded, task):
 
 # 🧠 Tabs
 with tab1:
-    input_df = get_user_input()
+    input_df = get_user_input(prefix="reg")
     input_scaled, input_encoded = preprocess_input(input_df)
-    if st.button("🔍 Predict Price"):
+    if st.button("🔍 Predict Price", key="predict_reg"):
         predict_and_display(regression_models, input_scaled, input_encoded, task="regression")
 
 with tab2:
-    input_df = get_user_input()
+    input_df = get_user_input(prefix="cls")
     input_scaled, input_encoded = preprocess_input(input_df)
-    if st.button("🔍 Predict Category"):
+    if st.button("🔍 Predict Category", key="predict_cls"):
         predict_and_display(classification_models, input_scaled, input_encoded, task="classification")
-
-
 
 

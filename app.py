@@ -1,75 +1,101 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import numpy as np
-import matplotlib.pyplot as plt
-import os
 
-# Load label encoder
-try:
-    le = joblib.load("models/label_encoder.pkl")
-except:
-    le = None
-    st.warning("⚠️ Label encoder not found. Classification labels may not display correctly.")
+# Load model and label encoder
+model = joblib.load("models/house_price_model.pkl")
+location_encoder = joblib.load("models/location_encoder.pkl")
 
-# Model options
-model_names = [
-    "LinearRegression", "Ridge", "Lasso", "RandomForestRegressor", "GradientBoostingRegressor",
-    "LogisticRegression", "RandomForestClassifier", "GradientBoostingClassifier", "SVC"
-]
+st.title("🏠 House Price Prediction App")
 
-def is_regression(model_name):
-    return model_name.endswith("Regressor") or model_name in ["LinearRegression", "Ridge", "Lasso"]
-
-# Sidebar
-st.sidebar.title("🔍 Model Selection")
-model_descriptions = {
-    "LinearRegression": "Simple linear model for price prediction",
-    "Ridge": "Linear model with L2 regularization",
-    "Lasso": "Linear model with L1 regularization",
-    "RandomForestRegressor": "Ensemble of decision trees (regression)",
-    "GradientBoostingRegressor": "Boosted trees for better accuracy",
-    "LogisticRegression": "Simple classifier for price category",
-    "RandomForestClassifier": "Ensemble classifier for categories",
-    "GradientBoostingClassifier": "Boosted classifier for categories",
-    "SVC": "Support Vector Classifier"
-}
-
-selected_model = st.sidebar.selectbox(
-    "🔍 Choose a model",
-    model_names,
-    format_func=lambda name: f"{name} — {model_descriptions.get(name, '')}"
-)
-
-# Load model
-model_path = f"models/{selected_model}.pkl"
-if not os.path.exists(model_path):
-    st.error(f"❌ Model file '{selected_model}.pkl' not found in 'models/' folder.")
-    st.stop()
-
-model = joblib.load(model_path)
+# ℹ️ Help Section
+with st.expander("ℹ️ What do these inputs mean?"):
+    st.markdown("""
+    - **📐 Area**: Total covered area in square feet  
+    - **🛏 Bedrooms**: Number of bedrooms  
+    - **🛁 Bathrooms**: Number of bathrooms  
+    - **🏢 Stories**: Number of floors  
+    - **🚗 Parking**: Number of parking spaces  
+    - **🛋 Guest Room**: Is there a guest room?  
+    - **🏚 Basement**: Is there a basement?  
+    - **🔥 Hot Water Heating**: Installed or not  
+    - **❄️ Air Conditioning**: Available or not  
+    - **🌟 Preferred Area**: Located in a premium zone  
+    - **🪑 Furnishing Status**: Furnished, semi, or unfurnished  
+    - **🛣 Main Road Access**: Direct access to main road  
+    - **📍 Location**: Neighborhood or city area
+    """)
 
 # Input form
-st.title("🏠 House Price Prediction Dashboard")
-st.write("Enter house specifications below:")
+st.header("Enter House Details")
 
-with st.form("prediction_form"):
-    area = st.number_input("Area (sq ft)", min_value=100)
-    bedrooms = st.slider("Bedrooms", 1, 10, 3)
-    location = st.selectbox("Location", ["Urban", "Suburban", "Rural"])
-    bathrooms = st.slider("Bathrooms", 1, 5, 2)
-    stories = st.slider("Stories", 1, 3, 1)
-    parking = st.slider("Parking Spaces", 0, 3, 1)
-    guestroom = st.selectbox("Guest Room", ["Yes", "No"])
-    basement = st.selectbox("Basement", ["Yes", "No"])
-    hotwaterheating = st.selectbox("Hot Water Heating", ["Yes", "No"])
-    airconditioning = st.selectbox("Air Conditioning", ["Yes", "No"])
-    prefarea = st.selectbox("Preferred Area", ["Yes", "No"])
-    furnishingstatus = st.selectbox("Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"])
-    submitted = st.form_submit_button("Predict")
+area = st.number_input(
+    "📐 Area (sq ft)", min_value=500, max_value=10000, step=50,
+    help="Total covered area of the house in square feet"
+)
 
-# Prepare input
-if submitted:
+bedrooms = st.selectbox(
+    "🛏 Number of Bedrooms", [1, 2, 3, 4, 5],
+    help="Total number of bedrooms in the house"
+)
+
+bathrooms = st.selectbox(
+    "🛁 Number of Bathrooms", [1, 2, 3, 4],
+    help="Total number of bathrooms in the house"
+)
+
+stories = st.selectbox(
+    "🏢 Number of Stories", [1, 2, 3],
+    help="How many floors the house has"
+)
+
+parking = st.selectbox(
+    "🚗 Parking Spaces", [0, 1, 2, 3],
+    help="Number of dedicated parking spots"
+)
+
+guestroom = st.selectbox(
+    "🛋 Guest Room", ["Yes", "No"],
+    help="Does the house include a guest room?"
+)
+
+basement = st.selectbox(
+    "🏚 Basement", ["Yes", "No"],
+    help="Is there a basement in the house?"
+)
+
+hotwaterheating = st.selectbox(
+    "🔥 Hot Water Heating", ["Yes", "No"],
+    help="Is hot water heating installed?"
+)
+
+airconditioning = st.selectbox(
+    "❄️ Air Conditioning", ["Yes", "No"],
+    help="Is air conditioning available?"
+)
+
+prefarea = st.selectbox(
+    "🌟 Preferred Area", ["Yes", "No"],
+    help="Is the house located in a preferred residential zone?"
+)
+
+furnishingstatus = st.selectbox(
+    "🪑 Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"],
+    help="Level of furnishing provided with the house"
+)
+
+mainroad = st.selectbox(
+    "🛣 Main Road Access", ["Yes", "No"],
+    help="Is the house directly accessible from a main road?"
+)
+
+location = st.selectbox(
+    "📍 Location", location_encoder.classes_,
+    help="Select the neighborhood or city area"
+)
+
+# Predict button
+if st.button("Predict Price"):
     input_dict = {
         "area": area,
         "bedrooms": bedrooms,
@@ -82,67 +108,23 @@ if submitted:
         "hotwaterheating": hotwaterheating,
         "airconditioning": airconditioning,
         "prefarea": prefarea,
-        "furnishingstatus": furnishingstatus
+        "furnishingstatus": furnishingstatus,
+        "mainroad": mainroad
     }
 
     input_df = pd.DataFrame([input_dict])
 
-    # Encode categorical features
+    # Map binary features
     binary_map = {"Yes": 1, "No": 0}
-    for col in ["guestroom", "basement", "hotwaterheating", "airconditioning", "prefarea"]:
+    for col in ["guestroom", "basement", "hotwaterheating", "airconditioning", "prefarea", "mainroad"]:
         input_df[col] = input_df[col].map(binary_map)
 
-    if le:
-        try:
-            input_df["location"] = le.transform(input_df["location"])
-        except ValueError:
-            st.warning("⚠️ Location encoding failed. Check if label encoder matches input categories.")
-            st.stop()
-    else:
-        st.warning("⚠️ Location not encoded. Model may not perform correctly.")
+    # Encode location
+    input_df["location"] = location_encoder.transform(input_df["location"])
 
-    # Prediction
-    try:
-        prediction = model.predict(input_df)
-    except Exception as e:
-        st.error(f"❌ Prediction failed: {e}")
-        st.stop()
-
-    if is_regression(selected_model):
-        price = prediction[0]
-        st.success(f"💰 Predicted Price: ${price:,.2f}")
-
-        st.subheader("📊 Price Breakdown")
-        fig, ax = plt.subplots()
-        ax.bar(["Predicted Price"], [price], color="skyblue")
-        ax.set_ylabel("Price ($)")
-        st.pyplot(fig)
-
-    else:
-        category_index = int(prediction[0])
-        category_label = le.inverse_transform([category_index])[0] if le else str(category_index)
-        st.success(f"🏷️ Predicted Category: {category_label}")
-
-        st.subheader("📊 Category Distribution")
-        fig, ax = plt.subplots()
-        ax.pie([1], labels=[category_label], colors=["lightgreen"], autopct="%1.1f%%")
-        st.pyplot(fig)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # Predict
+    prediction = model.predict(input_df)[0]
+    st.success(f"💰 Estimated House Price: PKR {prediction:,.0f}")
 
 
 

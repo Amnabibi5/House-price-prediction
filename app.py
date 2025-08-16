@@ -3,179 +3,397 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import warnings
+warnings.filterwarnings('ignore')
 
-# 📁 Load models and artifacts
-model_dir = "models"
-artifact_dir = "artifacts"
-scaler = joblib.load(os.path.join(artifact_dir, "scaler.pkl"))
+# 🎨 Page Configuration
+st.set_page_config(
+    page_title="ML Model Comparison Dashboard",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# 🧠 Load label encoder (optional)
-label_encoder_path = os.path.join(artifact_dir, "label_encoder.pkl")
-label_encoder = joblib.load(label_encoder_path) if os.path.exists(label_encoder_path) else None
-
-# 📊 Load metrics
-metrics_path = os.path.join(artifact_dir, "metrics.csv")
-metrics_df = pd.read_csv(metrics_path) if os.path.exists(metrics_path) else pd.DataFrame()
-
-# 📐 Load feature columns and ensure it's a list
-feature_cols_path = os.path.join(artifact_dir, "feature_columns.pkl")
-if os.path.exists(feature_cols_path):
-    raw_cols = joblib.load(feature_cols_path)
-    feature_cols = raw_cols.tolist() if isinstance(raw_cols, np.ndarray) else raw_cols
-else:
-    feature_cols = None
-
-# 📦 Model lists
-regression_models = [f for f in os.listdir(model_dir) if "LinearRegression" in f]
-classification_models = [f for f in os.listdir(model_dir) if f.endswith(".pkl") and f not in regression_models]
-
-# 🎨 App layout
-st.set_page_config(page_title="House Price Prediction", layout="wide")
-st.title("🏠 House Price Prediction Dashboard")
-tab1, tab2 = st.tabs(["📈 Regression Models", "🧠 Classification Models"])
-
-# 📋 Input form
-def get_user_input(prefix=""):
-    st.subheader("📋 Enter House Details")
-    area = st.number_input("📐 Area (sq ft)", min_value=500, max_value=10000, step=50, key=f"{prefix}_area")
-    bedrooms = st.selectbox("🛏 Bedrooms", [1, 2, 3, 4, 5], key=f"{prefix}_bedrooms")
-    bathrooms = st.selectbox("🛁 Bathrooms", [1, 2, 3, 4], key=f"{prefix}_bathrooms")
-    stories = st.selectbox("🏢 Stories", [1, 2, 3], key=f"{prefix}_stories")
-    parking = st.selectbox("🚗 Parking Spaces", [0, 1, 2, 3], key=f"{prefix}_parking")
-    guestroom = st.selectbox("🛋 Guest Room", ["Yes", "No"], key=f"{prefix}_guestroom")
-    basement = st.selectbox("🏚 Basement", ["Yes", "No"], key=f"{prefix}_basement")
-    hotwaterheating = st.selectbox("🔥 Hot Water Heating", ["Yes", "No"], key=f"{prefix}_hotwaterheating")
-    airconditioning = st.selectbox("❄️ Air Conditioning", ["Yes", "No"], key=f"{prefix}_airconditioning")
-    prefarea = st.selectbox("🌟 Preferred Area", ["Yes", "No"], key=f"{prefix}_prefarea")
-    furnishingstatus = st.selectbox("🪑 Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"], key=f"{prefix}_furnishingstatus")
-    mainroad = st.selectbox("🛣 Main Road Access", ["Yes", "No"], key=f"{prefix}_mainroad")
-
-    input_dict = {
-        "area": area,
-        "bedrooms": bedrooms,
-        "bathrooms": bathrooms,
-        "stories": stories,
-        "parking": parking,
-        "guestroom": guestroom,
-        "basement": basement,
-        "hotwaterheating": hotwaterheating,
-        "airconditioning": airconditioning,
-        "prefarea": prefarea,
-        "furnishingstatus": furnishingstatus,
-        "mainroad": mainroad
+# 🎯 Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
     }
-    return pd.DataFrame([input_dict])
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 5px solid #1f77b4;
+    }
+    .prediction-box {
+        background-color: #e8f4fd;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border: 2px solid #1f77b4;
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# 🧼 Preprocessing
-def preprocess_input(df):
-    binary_map = {"Yes": 1, "No": 0}
-    for col in ["guestroom", "basement", "hotwaterheating", "airconditioning", "prefarea", "mainroad"]:
-        df[col] = df[col].map(binary_map)
+# 🏠 Main Title
+st.markdown('<h1 class="main-header">🤖 ML Model Comparison Dashboard</h1>', unsafe_allow_html=True)
 
-    df["furnishingstatus"] = df["furnishingstatus"].astype(str)
-    df_encoded = pd.get_dummies(df, drop_first=True)
+# 🔧 Helper Functions
+@st.cache_data
+def load_metrics():
+    """Load model performance metrics"""
+    try:
+        return pd.read_csv("artifacts/metrics.csv")
+    except FileNotFoundError:
+        st.error("❌ Metrics file not found. Please run the training script first.")
+        return None
 
-    # ✅ FIX: Align with training columns
-    if feature_cols:
-        # Add missing columns
-        for col in feature_cols:
-            if col not in df_encoded.columns:
-                df_encoded[col] = 0
-        # Drop unexpected columns
-        df_encoded = df_encoded[[col for col in feature_cols if col in df_encoded.columns]]
+@st.cache_data
+def load_original_data():
+    """Load original dataset for feature reference"""
+    try:
+        return pd.read_csv("data/housing.csv")
+    except FileNotFoundError:
+        st.error("❌ Original dataset not found.")
+        return None
 
-        # 🧪 Debug info
-        st.write("🧪 Input columns:", df_encoded.columns.tolist())
-        st.write("🧪 Expected columns:", feature_cols)
-        missing = set(feature_cols) - set(df_encoded.columns)
-        extra = set(df_encoded.columns) - set(feature_cols)
-        if missing:
-            st.warning(f"🚨 Missing columns: {missing}")
-        if extra:
-            st.warning(f"🚨 Unexpected columns: {extra}")
-    else:
-        st.info("⚠️ No saved feature columns found — using scaler.feature_names_in_ instead.")
-        if hasattr(scaler, "feature_names_in_"):
-            for col in scaler.feature_names_in_:
-                if col not in df_encoded.columns:
-                    df_encoded[col] = 0
-            df_encoded = df_encoded[scaler.feature_names_in_]
-            st.write("🧪 Input aligned to scaler.feature_names_in_: ", scaler.feature_names_in_)
+@st.cache_resource
+def load_artifacts():
+    """Load scaler and label encoder"""
+    artifacts = {}
+    try:
+        artifacts['scaler'] = joblib.load("artifacts/scaler.pkl")
+    except FileNotFoundError:
+        st.error("❌ Scaler not found.")
+        return None
+    
+    # Try to load label encoder (only exists for classification)
+    try:
+        artifacts['label_encoder'] = joblib.load("artifacts/label_encoder.pkl")
+        artifacts['task_type'] = 'classification'
+    except FileNotFoundError:
+        artifacts['label_encoder'] = None
+        artifacts['task_type'] = 'regression'
+    
+    return artifacts
 
-    # Ensure float dtype
-    df_encoded = df_encoded.astype(float)
-    df_scaled = scaler.transform(df_encoded)
-    return df_scaled, df_encoded
+def get_available_models():
+    """Get list of available trained models"""
+    models_dir = "models"
+    if not os.path.exists(models_dir):
+        return []
+    return [f.replace('.pkl', '') for f in os.listdir(models_dir) if f.endswith('.pkl')]
 
-# 📊 Feature Importance Plot
-def plot_feature_importance(model, model_name, input_df):
-    if hasattr(model, "feature_importances_"):
-        importances = model.feature_importances_
-        features = input_df.columns
-    elif hasattr(model, "coef_"):
-        importances = model.coef_
-        features = input_df.columns
-    else:
-        st.info(f"ℹ️ Feature importance not available for {model_name}")
-        return
+def load_model(model_name):
+    """Load a specific model"""
+    try:
+        return joblib.load(f"models/{model_name}.pkl")
+    except FileNotFoundError:
+        st.error(f"❌ Model {model_name} not found.")
+        return None
 
-    st.subheader(f"🧠 Feature Importance: {model_name}")
-    fig, ax = plt.subplots()
-    sorted_idx = np.argsort(importances)
-    ax.barh(np.array(features)[sorted_idx], np.array(importances)[sorted_idx], color="lightgreen")
-    ax.set_xlabel("Importance Score")
-    st.pyplot(fig)
+def prepare_input_features(input_data, original_df, target_col):
+    """Prepare input features to match training format"""
+    # Create a copy of original data structure
+    sample_row = original_df.drop(target_col, axis=1).iloc[0:1].copy()
+    
+    # Update with user inputs
+    for col, value in input_data.items():
+        if col in sample_row.columns:
+            sample_row[col] = value
+    
+    # Apply same preprocessing as training
+    sample_encoded = pd.get_dummies(sample_row, drop_first=True)
+    
+    return sample_encoded
 
-# 🔍 Predict and display
-def predict_and_display(models, input_scaled, input_encoded, task):
-    predictions = {}
-    for model_file in models:
-        model_name = model_file.replace(".pkl", "")
-        model_path = os.path.join(model_dir, model_file)
-        try:
-            model = joblib.load(model_path)
-            pred = model.predict(input_scaled)[0]
-            if task == "classification" and label_encoder:
-                pred = label_encoder.inverse_transform([int(pred)])[0]
-            predictions[model_name] = pred
+# 📊 Sidebar Navigation
+st.sidebar.title("🔍 Navigation")
+page = st.sidebar.selectbox(
+    "Select Page",
+    ["📊 Model Performance", "🎯 Make Predictions", "📈 Data Insights"]
+)
 
-            with st.expander(f"📊 Feature Importance for {model_name}"):
-                plot_feature_importance(model, model_name, input_encoded)
-        except Exception as e:
-            predictions[model_name] = f"❌ Error: {e}"
+# Load necessary data
+metrics_df = load_metrics()
+original_df = load_original_data()
+artifacts = load_artifacts()
+available_models = get_available_models()
 
-    st.subheader("🔮 Predictions")
-    for name, value in predictions.items():
-        if task == "classification":
-            st.write(f"**{name}**: {value}")
-        else:
-            st.write(f"**{name}**: PKR {float(value):,.0f}" if isinstance(value, (int, float, np.generic)) else value)
+if metrics_df is None or original_df is None or artifacts is None:
+    st.stop()
 
-    # ✅ Fix for np.number issue
-    numeric_preds = {k: float(v) for k, v in predictions.items() if isinstance(v, (int, float, np.generic))}
-    if len(numeric_preds) == len(predictions):
-        st.subheader("📊 Model Comparison")
-        fig, ax = plt.subplots()
-        ax.bar(numeric_preds.keys(), numeric_preds.values(), color="skyblue")
-        ax.set_ylabel("Price (PKR)" if task == "regression" else "Class")
-        ax.set_title("Predicted Output by Model")
-        st.pyplot(fig)
+task_type = artifacts['task_type']
+target_col = "price"  # Should match your training script
 
+# 📊 PAGE 1: Model Performance
+if page == "📊 Model Performance":
+    st.header("📊 Model Performance Comparison")
+    
     if not metrics_df.empty:
-        st.subheader("📐 Model Performance Metrics")
-        filtered = metrics_df[metrics_df["Model"].isin(predictions.keys())]
-        st.dataframe(filtered.style.format({"RMSE": "{:,.0f}", "R2": "{:.2f}", "Accuracy": "{:.2f}"}))
+        # Display metrics table
+        st.subheader("📋 Performance Metrics")
+        st.dataframe(metrics_df, use_container_width=True)
+        
+        # Visualize performance
+        if task_type == "regression":
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # RMSE Comparison
+                fig_rmse = px.bar(
+                    metrics_df, 
+                    x="Model", 
+                    y="RMSE", 
+                    title="RMSE Comparison (Lower is Better)",
+                    color="RMSE",
+                    color_continuous_scale="Reds_r"
+                )
+                fig_rmse.update_layout(showlegend=False)
+                st.plotly_chart(fig_rmse, use_container_width=True)
+            
+            with col2:
+                # R2 Comparison
+                fig_r2 = px.bar(
+                    metrics_df, 
+                    x="Model", 
+                    y="R2", 
+                    title="R² Score Comparison (Higher is Better)",
+                    color="R2",
+                    color_continuous_scale="Greens"
+                )
+                fig_r2.update_layout(showlegend=False)
+                st.plotly_chart(fig_r2, use_container_width=True)
+                
+        else:  # Classification
+            # Accuracy Comparison
+            fig_acc = px.bar(
+                metrics_df, 
+                x="Model", 
+                y="Accuracy", 
+                title="Accuracy Comparison",
+                color="Accuracy",
+                color_continuous_scale="Blues"
+            )
+            fig_acc.update_layout(showlegend=False)
+            st.plotly_chart(fig_acc, use_container_width=True)
+        
+        # Best Model Highlight
+        if task_type == "regression":
+            best_model = metrics_df.loc[metrics_df['R2'].idxmax()]
+            metric_name = "R² Score"
+            metric_value = f"{best_model['R2']:.4f}"
+        else:
+            best_model = metrics_df.loc[metrics_df['Accuracy'].idxmax()]
+            metric_name = "Accuracy"
+            metric_value = f"{best_model['Accuracy']:.4f}"
+        
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>🏆 Best Performing Model</h3>
+            <h2>{best_model['Model']}</h2>
+            <p><strong>{metric_name}:</strong> {metric_value}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-# 🧠 Tabs
-with tab1:
-    input_df = get_user_input(prefix="reg")
-    input_scaled, input_encoded = preprocess_input(input_df)
-    if st.button("🔍 Predict Price", key="predict_reg"):
-        predict_and_display(regression_models, input_scaled, input_encoded, task="regression")
+# 🎯 PAGE 2: Make Predictions
+elif page == "🎯 Make Predictions":
+    st.header("🎯 Make Predictions")
+    
+    if available_models:
+        # Model Selection
+        selected_model = st.selectbox("🤖 Select Model", available_models)
+        
+        # Load selected model
+        model = load_model(selected_model)
+        scaler = artifacts['scaler']
+        
+        if model and scaler:
+            st.subheader("📝 Input Features")
+            
+            # Create input fields based on original dataset
+            feature_cols = [col for col in original_df.columns if col != target_col]
+            input_data = {}
+            
+            # Create columns for better layout
+            num_cols = 3
+            cols = st.columns(num_cols)
+            
+            for idx, col in enumerate(feature_cols):
+                with cols[idx % num_cols]:
+                    if original_df[col].dtype in ['object', 'category']:
+                        # Categorical feature
+                        unique_values = original_df[col].unique().tolist()
+                        input_data[col] = st.selectbox(f"{col}", unique_values)
+                    elif original_df[col].dtype in ['int64', 'float64']:
+                        # Numerical feature
+                        min_val = float(original_df[col].min())
+                        max_val = float(original_df[col].max())
+                        mean_val = float(original_df[col].mean())
+                        
+                        input_data[col] = st.number_input(
+                            f"{col}", 
+                            min_value=min_val, 
+                            max_value=max_val, 
+                            value=mean_val,
+                            step=(max_val - min_val) / 100
+                        )
+            
+            # Make Prediction Button
+            if st.button("🔮 Make Prediction", type="primary"):
+                try:
+                    # Prepare features
+                    input_features = prepare_input_features(input_data, original_df, target_col)
+                    
+                    # Ensure feature alignment with training data
+                    expected_features = scaler.n_features_in_
+                    if input_features.shape[1] != expected_features:
+                        st.error(f"❌ Feature mismatch. Expected {expected_features}, got {input_features.shape[1]}")
+                    else:
+                        # Scale features
+                        input_scaled = scaler.transform(input_features)
+                        
+                        # Make prediction
+                        prediction = model.predict(input_scaled)[0]
+                        
+                        # Handle classification vs regression
+                        if task_type == "classification":
+                            if artifacts['label_encoder']:
+                                prediction_label = artifacts['label_encoder'].inverse_transform([prediction])[0]
+                                
+                                # Get prediction probabilities if available
+                                if hasattr(model, 'predict_proba'):
+                                    probabilities = model.predict_proba(input_scaled)[0]
+                                    classes = artifacts['label_encoder'].classes_
+                                    
+                                    st.markdown(f"""
+                                    <div class="prediction-box">
+                                        <h3>🎯 Prediction Result</h3>
+                                        <h2>Class: {prediction_label}</h2>
+                                        <p>Confidence: {max(probabilities):.2%}</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Show probability distribution
+                                    prob_df = pd.DataFrame({
+                                        'Class': classes,
+                                        'Probability': probabilities
+                                    })
+                                    
+                                    fig_prob = px.bar(
+                                        prob_df, 
+                                        x='Class', 
+                                        y='Probability',
+                                        title="Prediction Probabilities"
+                                    )
+                                    st.plotly_chart(fig_prob, use_container_width=True)
+                                else:
+                                    st.markdown(f"""
+                                    <div class="prediction-box">
+                                        <h3>🎯 Prediction Result</h3>
+                                        <h2>Class: {prediction_label}</h2>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                        else:  # Regression
+                            st.markdown(f"""
+                            <div class="prediction-box">
+                                <h3>🎯 Prediction Result</h3>
+                                <h2>{target_col}: {prediction:.2f}</h2>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                except Exception as e:
+                    st.error(f"❌ Prediction failed: {str(e)}")
+    else:
+        st.warning("⚠️ No trained models found. Please run the training script first.")
 
-with tab2:
-    input_df = get_user_input(prefix="cls")
-    input_scaled, input_encoded = preprocess_input(input_df)
-    if st.button("🔍 Predict Category", key="predict_cls"):
-        predict_and_display(classification_models, input_scaled, input_encoded, task="classification")
+# 📈 PAGE 3: Data Insights
+elif page == "📈 Data Insights":
+    st.header("📈 Data Insights")
+    
+    # Dataset Overview
+    st.subheader("📊 Dataset Overview")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Samples", len(original_df))
+    with col2:
+        st.metric("Features", len(original_df.columns) - 1)
+    with col3:
+        st.metric("Task Type", task_type.title())
+    with col4:
+        st.metric("Missing Values", original_df.isnull().sum().sum())
+    
+    # Data Distribution
+    st.subheader("📈 Target Variable Distribution")
+    
+    if task_type == "regression":
+        fig_dist = px.histogram(
+            original_df, 
+            x=target_col, 
+            title=f"Distribution of {target_col}",
+            nbins=30
+        )
+        st.plotly_chart(fig_dist, use_container_width=True)
+    else:
+        value_counts = original_df[target_col].value_counts()
+        fig_dist = px.pie(
+            values=value_counts.values,
+            names=value_counts.index,
+            title=f"Distribution of {target_col}"
+        )
+        st.plotly_chart(fig_dist, use_container_width=True)
+    
+    # Feature Correlation (for numerical features)
+    numerical_cols = original_df.select_dtypes(include=[np.number]).columns.tolist()
+    if len(numerical_cols) > 1:
+        st.subheader("🔗 Feature Correlations")
+        corr_matrix = original_df[numerical_cols].corr()
+        
+        fig_corr = px.imshow(
+            corr_matrix,
+            text_auto=True,
+            aspect="auto",
+            title="Feature Correlation Matrix"
+        )
+        st.plotly_chart(fig_corr, use_container_width=True)
+    
+    # Feature Statistics
+    st.subheader("📋 Feature Statistics")
+    st.dataframe(original_df.describe(), use_container_width=True)
+    
+    # Data Sample
+    st.subheader("👀 Data Sample")
+    st.dataframe(original_df.head(10), use_container_width=True)
+
+# 🔄 Sidebar Information
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📝 Instructions")
+st.sidebar.markdown("""
+1. **📊 Model Performance**: View and compare model metrics
+2. **🎯 Make Predictions**: Input features and get predictions
+3. **📈 Data Insights**: Explore dataset characteristics
+""")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ℹ️ System Info")
+if metrics_df is not None:
+    st.sidebar.markdown(f"**Models Trained**: {len(available_models)}")
+    st.sidebar.markdown(f"**Task Type**: {task_type.title()}")
+    st.sidebar.markdown(f"**Dataset Size**: {len(original_df)} samples")
+
+# Footer
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #666;'>"
+    "🤖 ML Model Comparison Dashboard | Built with Streamlit"
+    "</div>", 
+    unsafe_allow_html=True
+)

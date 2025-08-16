@@ -76,28 +76,32 @@ def preprocess_input(df):
     df["furnishingstatus"] = df["furnishingstatus"].astype(str)
     df_encoded = pd.get_dummies(df, drop_first=True)
 
-    # ✅ FIX: Align with training columns or scaler fallback
-    expected_cols = feature_cols if feature_cols else getattr(scaler, "feature_names_in_", None)
-
-    if expected_cols:
+    # ✅ FIX: Align with training columns
+    if feature_cols:
         # Add missing columns
-        for col in expected_cols:
+        for col in feature_cols:
             if col not in df_encoded.columns:
                 df_encoded[col] = 0
         # Drop unexpected columns
-        df_encoded = df_encoded[[col for col in expected_cols if col in df_encoded.columns]]
+        df_encoded = df_encoded[[col for col in feature_cols if col in df_encoded.columns]]
 
         # 🧪 Debug info
         st.write("🧪 Input columns:", df_encoded.columns.tolist())
-        st.write("🧪 Expected columns:", expected_cols)
-        missing = set(expected_cols) - set(df_encoded.columns)
-        extra = set(df_encoded.columns) - set(expected_cols)
+        st.write("🧪 Expected columns:", feature_cols)
+        missing = set(feature_cols) - set(df_encoded.columns)
+        extra = set(df_encoded.columns) - set(feature_cols)
         if missing:
             st.warning(f"🚨 Missing columns: {missing}")
         if extra:
             st.warning(f"🚨 Unexpected columns: {extra}")
     else:
-        st.error("❌ No feature column reference available. Please check your artifacts.")
+        st.info("⚠️ No saved feature columns found — using scaler.feature_names_in_ instead.")
+        if hasattr(scaler, "feature_names_in_"):
+            for col in scaler.feature_names_in_:
+                if col not in df_encoded.columns:
+                    df_encoded[col] = 0
+            df_encoded = df_encoded[scaler.feature_names_in_]
+            st.write("🧪 Input aligned to scaler.feature_names_in_: ", scaler.feature_names_in_)
 
     # Ensure float dtype
     df_encoded = df_encoded.astype(float)
@@ -175,4 +179,3 @@ with tab2:
     input_scaled, input_encoded = preprocess_input(input_df)
     if st.button("🔍 Predict Category", key="predict_cls"):
         predict_and_display(classification_models, input_scaled, input_encoded, task="classification")
-

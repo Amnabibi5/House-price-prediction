@@ -79,25 +79,29 @@ def preprocess_input(df):
 
     df_encoded = pd.get_dummies(df, drop_first=True)
 
-    # Align with training columns
+    # Align with training columns if available
     if feature_cols:
         for col in feature_cols:
             if col not in df_encoded.columns:
                 df_encoded[col] = 0
         df_encoded = df_encoded[feature_cols]
 
+        # 🧪 Debug info only when feature_cols exist
+        st.write("🧪 Input columns:", df_encoded.columns.tolist())
+        st.write("🧪 Expected columns:", feature_cols)
+
+        missing = set(feature_cols) - set(df_encoded.columns)
+        extra = set(df_encoded.columns) - set(feature_cols)
+        if missing:
+            st.warning(f"🚨 Missing columns: {missing}")
+        if extra:
+            st.warning(f"🚨 Unexpected columns: {extra}")
+    else:
+        st.info("⚠️ No saved feature columns found — using current input features only.")
+        st.write("🧪 Input columns:", df_encoded.columns.tolist())
+
     # Ensure column order and types match
     df_encoded = df_encoded.astype(float)
-
-    # 🧪 Debug info
-    st.write("🧪 Input columns:", df_encoded.columns.tolist())
-    st.write("🧪 Expected columns:", feature_cols)
-    missing = set(feature_cols) - set(df_encoded.columns)
-    extra = set(df_encoded.columns) - set(feature_cols)
-    if missing:
-        st.warning(f"🚨 Missing columns: {missing}")
-    if extra:
-        st.warning(f"🚨 Unexpected columns: {extra}")
 
     df_scaled = scaler.transform(df_encoded)
     return df_scaled, df_encoded
@@ -142,12 +146,17 @@ def predict_and_display(models, input_scaled, input_encoded, task):
 
     st.subheader("🔮 Predictions")
     for name, value in predictions.items():
-        st.write(f"**{name}**: {value if task == 'classification' else f'PKR {value:,.0f}'}")
+        if task == "classification":
+            st.write(f"**{name}**: {value}")
+        else:
+            st.write(f"**{name}**: PKR {float(value):,.0f}" if isinstance(value, (int, float, np.generic)) else value)
 
-    if all(isinstance(v, (int, float, np.number)) for v in predictions.values()):
+    # ✅ Fix for np.number issue
+    numeric_preds = {k: float(v) for k, v in predictions.items() if isinstance(v, (int, float, np.generic))}
+    if len(numeric_preds) == len(predictions):
         st.subheader("📊 Model Comparison")
         fig, ax = plt.subplots()
-        ax.bar(predictions.keys(), predictions.values(), color="skyblue")
+        ax.bar(numeric_preds.keys(), numeric_preds.values(), color="skyblue")
         ax.set_ylabel("Price (PKR)" if task == "regression" else "Class")
         ax.set_title("Predicted Output by Model")
         st.pyplot(fig)
@@ -169,3 +178,5 @@ with tab2:
     input_scaled, input_encoded = preprocess_input(input_df)
     if st.button("🔍 Predict Category"):
         predict_and_display(classification_models, input_scaled, input_encoded, task="classification")
+
+

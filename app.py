@@ -742,4 +742,172 @@ elif page == "🔧 System Diagnostics":
             st.write("**Sample Input:**", sample_input)
             
             # Test feature preparation
-            test
+            test_features = prepare_input_features_exact_match(sample_input, original_df, target_col)
+            
+            if test_features is not None:
+                expected_count = artifacts['scaler'].n_features_in_
+                actual_count = test_features.shape[1]
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Expected Features", expected_count)
+                with col2:
+                    st.metric("Actual Features", actual_count)
+                with col3:
+                    alignment_status = "✅ Perfect" if actual_count == expected_count else "❌ Mismatch"
+                    st.metric("Alignment", alignment_status)
+                
+                if actual_count == expected_count:
+                    st.success("🎉 Feature alignment test passed!")
+                    
+                    # Show first few features
+                    st.write("**First 10 Feature Values:**")
+                    feature_preview = test_features.iloc[0, :10].to_dict()
+                    st.json(feature_preview)
+                    
+                    # Test scaling
+                    try:
+                        scaled_features = artifacts['scaler'].transform(test_features)
+                        st.success("✅ Scaling test passed!")
+                        st.write(f"**Scaled Shape:** {scaled_features.shape}")
+                    except Exception as scale_error:
+                        st.error(f"❌ Scaling failed: {scale_error}")
+                else:
+                    st.error(f"❌ Feature count mismatch: Expected {expected_count}, got {actual_count}")
+                    
+                    # Show detailed feature comparison
+                    training_cols = load_training_feature_columns()
+                    if training_cols:
+                        st.write("**Training Columns:**", len(training_cols))
+                        st.write("**Test Columns:**", list(test_features.columns))
+                        
+                        # Find missing and extra columns
+                        missing_cols = set(training_cols) - set(test_features.columns)
+                        extra_cols = set(test_features.columns) - set(training_cols)
+                        
+                        if missing_cols:
+                            st.warning(f"**Missing Columns:** {list(missing_cols)[:5]}...")
+                        if extra_cols:
+                            st.warning(f"**Extra Columns:** {list(extra_cols)[:5]}...")
+            else:
+                st.error("❌ Feature preparation failed!")
+                
+        except Exception as e:
+            st.error(f"❌ Alignment test failed: {str(e)}")
+    
+    # Training Feature Analysis
+    st.subheader("📋 Training Feature Analysis")
+    
+    training_columns = load_training_feature_columns()
+    categorical_mappings = load_training_categorical_mappings()
+    
+    if training_columns:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"**Total Training Features:** {len(training_columns)}")
+            st.write(f"**Scaler Expected:** {artifacts['scaler'].n_features_in_}")
+            
+            # Categorize training features
+            numerical_features = []
+            categorical_features = []
+            
+            for col in training_columns:
+                # Check if this looks like a one-hot encoded column
+                if '_' in col and any(orig_col + '_' == col[:col.rfind('_')+1] for orig_col in original_df.select_dtypes(include=['object', 'category']).columns):
+                    categorical_features.append(col)
+                else:
+                    numerical_features.append(col)
+            
+            st.write(f"**Numerical Features:** {len(numerical_features)}")
+            st.write(f"**Categorical Features:** {len(categorical_features)}")
+        
+        with col2:
+            if categorical_mappings:
+                st.write("**Categorical Mappings Available:** ✅")
+                st.write(f"**Mapped Categories:** {len(categorical_mappings)}")
+                
+                # Show category counts
+                for cat_col, values in categorical_mappings.items():
+                    if isinstance(values, (list, set)):
+                        st.write(f"- {cat_col}: {len(values)} values")
+            else:
+                st.write("**Categorical Mappings Available:** ❌")
+                st.write("Using fallback encoding methods")
+        
+        # Show sample of training columns
+        with st.expander("👀 Training Feature Columns Sample"):
+            st.write("**First 20 Training Columns:**")
+            for i, col in enumerate(training_columns[:20]):
+                st.write(f"{i+1}. {col}")
+            if len(training_columns) > 20:
+                st.write(f"... and {len(training_columns) - 20} more columns")
+    else:
+        st.warning("⚠️ Training feature columns not available")
+        st.write("This may cause feature alignment issues during prediction.")
+        st.write("Consider saving feature columns during training:")
+        st.code("""
+# In your training script, add:
+import joblib
+
+# After creating encoded features
+joblib.dump(feature_columns, 'artifacts/feature_columns.pkl')
+
+# After processing categorical variables
+joblib.dump(categorical_mappings, 'artifacts/categorical_mappings.pkl')
+        """, language="python")
+
+# 🔄 Sidebar Information
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📝 Instructions")
+st.sidebar.markdown("""
+1. **📊 Model Performance**: View and compare model metrics
+2. **🎯 Make Predictions**: Input features and get predictions  
+3. **📈 Data Insights**: Explore dataset characteristics
+4. **🔧 System Diagnostics**: Check system status and debug issues
+""")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ℹ️ System Info")
+if metrics_df is not None:
+    st.sidebar.markdown(f"**Models Trained**: {len(available_models)}")
+    st.sidebar.markdown(f"**Task Type**: {task_type.title()}")
+    st.sidebar.markdown(f"**Dataset Size**: {len(original_df)} samples")
+
+# Feature Alignment Status
+st.sidebar.markdown("### 🎯 Feature Status")
+training_cols = load_training_feature_columns()
+categorical_maps = load_training_categorical_mappings()
+
+alignment_items = [
+    ("Training Columns", "✅" if training_cols else "❌"),
+    ("Categorical Maps", "✅" if categorical_maps else "❌"),
+    ("Scaler", "✅" if artifacts and artifacts.get('scaler') else "❌"),
+    ("Models", "✅" if available_models else "❌")
+]
+
+for item, status in alignment_items:
+    st.sidebar.markdown(f"{status} {item}")
+
+# System Status
+st.sidebar.markdown("### 🚦 System Status")
+status_items = [
+    ("Data", "✅" if original_df is not None else "❌"),
+    ("Models", "✅" if available_models else "❌"),  
+    ("Artifacts", "✅" if artifacts else "❌"),
+    ("Metrics", "✅" if metrics_df is not None else "❌")
+]
+
+for item, status in status_items:
+    st.sidebar.markdown(f"{status} {item}")
+
+# Footer
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #666;'>"
+    "🤖 ML Model Comparison Dashboard | Built with Streamlit | "
+    f"Task: {task_type.title()} | Models: {len(available_models)} | "
+    f"Feature Alignment: {'✅' if training_cols else '⚠️'}"
+    "</div>", 
+    unsafe_allow_html=True
+)

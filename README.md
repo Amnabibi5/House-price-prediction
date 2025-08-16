@@ -75,7 +75,7 @@ Designed for deployment and scalability, the app integrates:
 ## 📸 Dashboard Preview
 
 ![House Price Prediction Dashboard](assets/price_prediction.png)
-![House Price Prediction Dashboard](assets/price_prediction.png)
+![House Price Prediction Dashboard](assets/model_comparision.png)
 ## 🚀 Live Demo
 
 👉 [Streamlit App]((https://house-price-prediction-tuvtktrzvhkkmc3vh6ztna.streamlit.app/)

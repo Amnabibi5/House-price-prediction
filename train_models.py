@@ -18,8 +18,9 @@ os.makedirs("artifacts", exist_ok=True)
 df = pd.read_csv("data/housing.csv")
 
 # 🧹 Preprocessing
-X = df.drop("target", axis=1)
-y = df["target"]
+X = df.drop("price", axis=1)
+y = df["price"]
+
 
 # Detect task type
 task_type = "regression" if y.dtype in [np.float64, np.int64] and len(y.unique()) > 10 else "classification"
@@ -73,6 +74,7 @@ metrics_df = pd.DataFrame(metrics)
 metrics_df.to_csv("artifacts/metrics.csv", index=False)
 
 print(f"✅ Training complete. Models saved in /models, metrics in /artifacts.")
+
 
 
 

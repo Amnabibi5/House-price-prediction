@@ -1,10 +1,18 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import os
 
 # Load model and label encoder
-model = joblib.load("models/house_price_model.pkl")
-location_encoder = joblib.load("models/location_encoder.pkl")
+model_path = "models/LinearRegression.pkl"
+encoder_path = "models/label_encoder.pkl"
+
+if not os.path.exists(model_path) or not os.path.exists(encoder_path):
+    st.error("❌ Required model files not found. Please ensure 'LinearRegression.pkl' and 'label_encoder.pkl' exist in the 'models' folder.")
+    st.stop()
+
+model = joblib.load(model_path)
+location_encoder = joblib.load(encoder_path)
 
 st.title("🏠 House Price Prediction App")
 
@@ -29,70 +37,19 @@ with st.expander("ℹ️ What do these inputs mean?"):
 # Input form
 st.header("Enter House Details")
 
-area = st.number_input(
-    "📐 Area (sq ft)", min_value=500, max_value=10000, step=50,
-    help="Total covered area of the house in square feet"
-)
-
-bedrooms = st.selectbox(
-    "🛏 Number of Bedrooms", [1, 2, 3, 4, 5],
-    help="Total number of bedrooms in the house"
-)
-
-bathrooms = st.selectbox(
-    "🛁 Number of Bathrooms", [1, 2, 3, 4],
-    help="Total number of bathrooms in the house"
-)
-
-stories = st.selectbox(
-    "🏢 Number of Stories", [1, 2, 3],
-    help="How many floors the house has"
-)
-
-parking = st.selectbox(
-    "🚗 Parking Spaces", [0, 1, 2, 3],
-    help="Number of dedicated parking spots"
-)
-
-guestroom = st.selectbox(
-    "🛋 Guest Room", ["Yes", "No"],
-    help="Does the house include a guest room?"
-)
-
-basement = st.selectbox(
-    "🏚 Basement", ["Yes", "No"],
-    help="Is there a basement in the house?"
-)
-
-hotwaterheating = st.selectbox(
-    "🔥 Hot Water Heating", ["Yes", "No"],
-    help="Is hot water heating installed?"
-)
-
-airconditioning = st.selectbox(
-    "❄️ Air Conditioning", ["Yes", "No"],
-    help="Is air conditioning available?"
-)
-
-prefarea = st.selectbox(
-    "🌟 Preferred Area", ["Yes", "No"],
-    help="Is the house located in a preferred residential zone?"
-)
-
-furnishingstatus = st.selectbox(
-    "🪑 Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"],
-    help="Level of furnishing provided with the house"
-)
-
-mainroad = st.selectbox(
-    "🛣 Main Road Access", ["Yes", "No"],
-    help="Is the house directly accessible from a main road?"
-)
-
-location = st.selectbox(
-    "📍 Location", location_encoder.classes_,
-    help="Select the neighborhood or city area"
-)
+area = st.number_input("📐 Area (sq ft)", min_value=500, max_value=10000, step=50, help="Total covered area of the house in square feet")
+bedrooms = st.selectbox("🛏 Number of Bedrooms", [1, 2, 3, 4, 5], help="Total number of bedrooms in the house")
+bathrooms = st.selectbox("🛁 Number of Bathrooms", [1, 2, 3, 4], help="Total number of bathrooms in the house")
+stories = st.selectbox("🏢 Number of Stories", [1, 2, 3], help="How many floors the house has")
+parking = st.selectbox("🚗 Parking Spaces", [0, 1, 2, 3], help="Number of dedicated parking spots")
+guestroom = st.selectbox("🛋 Guest Room", ["Yes", "No"], help="Does the house include a guest room?")
+basement = st.selectbox("🏚 Basement", ["Yes", "No"], help="Is there a basement in the house?")
+hotwaterheating = st.selectbox("🔥 Hot Water Heating", ["Yes", "No"], help="Is hot water heating installed?")
+airconditioning = st.selectbox("❄️ Air Conditioning", ["Yes", "No"], help="Is air conditioning available?")
+prefarea = st.selectbox("🌟 Preferred Area", ["Yes", "No"], help="Is the house located in a preferred residential zone?")
+furnishingstatus = st.selectbox("🪑 Furnishing Status", ["Furnished", "Semi-Furnished", "Unfurnished"], help="Level of furnishing provided with the house")
+mainroad = st.selectbox("🛣 Main Road Access", ["Yes", "No"], help="Is the house directly accessible from a main road?")
+location = st.selectbox("📍 Location", location_encoder.classes_, help="Select the neighborhood or city area")
 
 # Predict button
 if st.button("Predict Price"):
@@ -125,6 +82,8 @@ if st.button("Predict Price"):
     # Predict
     prediction = model.predict(input_df)[0]
     st.success(f"💰 Estimated House Price: PKR {prediction:,.0f}")
+
+
 
 
 
